@@ -429,8 +429,11 @@ export class PivotRequester {
           // remoteErrorDialog("Error constructing view", err.message); // Now let's try and restore to previous view params:
           oneref.update(
             stateRef,
-            vsUpdate((vs: ViewState) =>
-              vs.update("loadingTimer", (lt) => lt.stop())
+            vsUpdate(
+              (vs: ViewState) =>
+                vs
+                  .update("loadingTimer", (lt) => lt.stop())
+                  .set("loadFailed", true) as ViewState
             )
           );
           if (this.errorCallback) {
@@ -441,10 +444,11 @@ export class PivotRequester {
         "viewState",
         "loadingTimer",
       ]);
-      const nextAppState = appState.updateIn(
-        ["viewState", "loadingTimer"],
-        (lt) => (lt as Timer).run(200, ltUpdater as unknown as TimerUpdater)
-      ) as AppState;
+      const nextAppState = appState
+        .updateIn(["viewState", "loadingTimer"], (lt) =>
+          (lt as Timer).run(200, ltUpdater as unknown as TimerUpdater)
+        )
+        .setIn(["viewState", "loadFailed"], false) as AppState;
       oneref.update(stateRef, (_) => nextAppState);
     } else {
       // No change in view parameters; check whether the range we'd want

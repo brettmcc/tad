@@ -27,6 +27,14 @@ export interface ViewStateProps {
   queryView: QueryView | undefined | null;
   dataView: PagedDataView | undefined | null;
 
+  /**
+   * True if the most recent attempt to evaluate this view failed.
+   * Distinguishes "dataView is null because we're still loading" from
+   * "dataView is null because the load blew up", so the UI can stop
+   * showing a loading indicator that would otherwise spin forever.
+   */
+  loadFailed: boolean;
+
   delayedCalcMode: boolean; // If true, don't recalc from view params until user hits "apply"
 }
 
@@ -42,6 +50,7 @@ const defaultViewStateProps: ViewStateProps = {
   viewportBottom: 0,
   queryView: null,
   dataView: null,
+  loadFailed: false,
   delayedCalcMode: true,
 };
 
@@ -60,5 +69,6 @@ export class ViewState
   public readonly viewportBottom!: number;
   public readonly queryView!: QueryView | undefined | null;
   public readonly dataView!: PagedDataView | undefined | null;
+  public readonly loadFailed!: boolean;
   public readonly delayedCalcMode!: boolean;
 }

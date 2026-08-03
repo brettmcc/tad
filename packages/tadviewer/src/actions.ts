@@ -69,6 +69,16 @@ export async function stopAppLoadingTimer(
   );
 }
 
+export async function setInitialLoadPending(
+  pending: boolean,
+  stateRef: StateRef<AppState>
+): Promise<void> {
+  await awaitableUpdate_(
+    stateRef,
+    (st: AppState) => st.set("initialLoadPending", pending) as AppState
+  );
+}
+
 export const replaceCurrentView = async (
   dsPath: DataSourcePath,
   stateRef: StateRef<AppState>,

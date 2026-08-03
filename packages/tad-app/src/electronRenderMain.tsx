@@ -91,22 +91,33 @@ async function openFromOpenParams(
   let targetDSPath: DataSourcePath | null = null;
   let viewParams: ViewParams | null = null;
 
-  if (openParams) {
-    [targetDSPath, viewParams] = openParamsDSPath(openParams);
-    if (targetDSPath !== null) {
-      await actions.openDataSourcePath(
-        targetDSPath,
-        stateRef,
-        viewParams ?? undefined
-      );
+  try {
+    if (openParams) {
+      [targetDSPath, viewParams] = openParamsDSPath(openParams);
+      if (targetDSPath !== null) {
+        await actions.openDataSourcePath(
+          targetDSPath,
+          stateRef,
+          viewParams ?? undefined
+        );
+      }
     }
+  } finally {
+    // Whether we opened something or blew up trying, the launch-time load is
+    // no longer pending; from here on the ViewState drives the spinner.
+    await actions.setInitialLoadPending(false, stateRef);
   }
 }
 // TODO: figure out how to initialize based on saved views or different file / table names
 const init = async () => {
   const tStart = performance.now();
   log.setLevel(log.levels.INFO); // debug for more verbosity
-  const appState = new AppState();
+  const openParams = (window as any).openParams as OpenParams | undefined;
+  // Mark the load as pending before the first render so the empty-state
+  // "Open Dataset" button never flashes on the way to showing the data.
+  const hasInitialFile =
+    openParams != null && openParams.openType !== "empty";
+  const appState = new AppState({ initialLoadPending: hasInitialFile });
   const stateRef = mkRef(appState);
   const [App, listenerId] = refContainer<AppState, AppPaneBaseProps>(
     stateRef,
@@ -159,7 +170,6 @@ const init = async () => {
       remoteErrorDialog("Error opening data source", err.message)
     );
 
-    const openParams = (window as any).openParams as OpenParams | undefined;
     try {
       await openFromOpenParams(openParams, stateRef);
     } catch (openErr: any) {

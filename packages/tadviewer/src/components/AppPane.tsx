@@ -16,6 +16,7 @@ import {
   HTMLSelect,
   Text,
   Collapse,
+  Spinner,
 } from "@blueprintjs/core";
 import { GridPane, OpenURLFn } from "./GridPane";
 import { Footer } from "./Footer";
@@ -479,13 +480,28 @@ export const AppPane: React.FunctionComponent<AppPaneProps> = ({
     );
   } else {
     pivotSidebar = null;
-    if (timerShowModal(appState.appLoadingTimer)) {
-      centerPane = <LoadingModal />;
-    } else if (
-      appState.initialized &&
-      !appState.appLoadingTimer.running &&
-      onOpenDataset
-    ) {
+    // A dataset is on its way in if: we haven't finished starting up, we were
+    // launched with a file we haven't opened yet, an open is in flight, or a
+    // ViewState exists but its first data page hasn't arrived (and didn't
+    // fail). In all of those cases show a spinner -- never the "Open Dataset"
+    // button, which flashes and invites a click that would be thrown away.
+    const datasetLoading =
+      !appState.initialized ||
+      appState.initialLoadPending ||
+      appState.appLoadingTimer.running ||
+      (viewState !== null &&
+        viewState.dataView == null &&
+        !viewState.loadFailed);
+    if (datasetLoading) {
+      centerPane = (
+        <div className="center-app-pane empty-center-pane">
+          <div className="empty-center-content" data-testid="loading-pane">
+            <Spinner intent="primary" size={40} />
+            <div className="empty-center-message">Loading dataset&hellip;</div>
+          </div>
+        </div>
+      );
+    } else if (onOpenDataset) {
       centerPane = (
         <div className="center-app-pane empty-center-pane">
           <div className="empty-center-content">

@@ -53,6 +53,13 @@ export interface AppStateProps {
   viewConfirmSourcePath: DataSourcePath | null;
 
   appLoadingTimer: Timer;
+  /**
+   * True from window creation until the file we were launched with has been
+   * handed to openDataSourcePath. Without it there's a gap after the first
+   * render where nothing is loading *yet*, and the empty-state "Open Dataset"
+   * button flashes before the dataset appears.
+   */
+  initialLoadPending: boolean;
   activity: Activity;
   showRecordCount: boolean;
 
@@ -89,6 +96,7 @@ const defaultAppStateProps: AppStateProps = {
   viewConfirmDialogOpen: false,
   viewConfirmSourcePath: null,
   appLoadingTimer: new Timer(),
+  initialLoadPending: false,
   activity: "None",
   showRecordCount: true,
   commandResults: Immutable.List<CommandResultEntry>(),
@@ -116,6 +124,7 @@ export class AppState extends Immutable.Record(defaultAppStateProps) {
   public readonly viewConfirmDialogOpen!: boolean;
   public readonly viewConfirmSourcePath!: DataSourcePath | null;
   public readonly appLoadingTimer!: Timer;
+  public readonly initialLoadPending!: boolean;
   public readonly activity!: Activity;
   public readonly showRecordCount!: boolean;
   public readonly commandResults!: Immutable.List<CommandResultEntry>;
