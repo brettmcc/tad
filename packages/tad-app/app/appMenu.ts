@@ -147,7 +147,7 @@ export const createMenu = () => {
         focusedWindow: BrowserWindow | undefined,
         event: KeyboardEvent
       ) => {
-        electron.shell.openExternal("mailto:tad-feedback@tadviewer.com");
+        electron.shell.openExternal("mailto:brett.mccully@gmail.com");
       },
     },
   ];
