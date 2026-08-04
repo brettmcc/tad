@@ -73,6 +73,36 @@
     margin-bottom: 0;
     white-space: nowrap;
   }
+
+  /* Blueprint's default (light-theme) switch track is a washed-out gray that
+     nearly vanishes on the dark chrome; use a light track + white knob so the
+     off state reads as clearly as the on state. */
+  .bp4-switch {
+    input:not(:checked) ~ .bp4-control-indicator {
+      background-color: rgba(213, 217, 224, 0.55);
+    }
+
+    &:hover input:not(:checked) ~ .bp4-control-indicator {
+      background-color: rgba(213, 217, 224, 0.75);
+    }
+
+    input:checked ~ .bp4-control-indicator {
+      background-color: var(--tad-accent);
+    }
+
+    &:hover input:checked ~ .bp4-control-indicator {
+      background-color: #8ab6fa;
+    }
+
+    input:disabled ~ .bp4-control-indicator {
+      opacity: 0.5;
+    }
+
+    .bp4-control-indicator::before {
+      background: #ffffff;
+      box-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
+    }
+  }
 }
 
 .footer-materialize-warning {
