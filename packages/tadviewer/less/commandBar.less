@@ -111,6 +111,57 @@
   background: var(--tad-results);
 }
 
+/* VS Code style sash: grip dots at rest, a light blue line on hover/drag */
+
+.results-pane-resizer {
+  flex: 0 0 auto;
+  position: relative;
+  height: 7px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: ns-resize;
+  user-select: none;
+  touch-action: none;
+}
+
+.results-pane-resizer::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: -1px; /* sits over the pane's border-top */
+  height: 2px;
+  background: var(--tad-accent);
+  opacity: 0;
+  transition: opacity 90ms ease-in;
+}
+
+.results-pane-resizer:hover::after,
+.results-pane-resizer-active::after {
+  opacity: 1;
+}
+
+.results-pane-resizer-grip {
+  width: 26px;
+  height: 2px;
+  color: var(--tad-subtle);
+  background-image: radial-gradient(
+    circle,
+    currentColor 1px,
+    transparent 1.1px
+  );
+  background-size: 6px 2px;
+  background-repeat: repeat-x;
+  background-position: center;
+  opacity: 0.75;
+}
+
+.results-pane-resizer:hover .results-pane-resizer-grip,
+.results-pane-resizer-active .results-pane-resizer-grip {
+  opacity: 0;
+}
+
 .results-pane-header {
   flex: 0 0 auto;
   display: flex;

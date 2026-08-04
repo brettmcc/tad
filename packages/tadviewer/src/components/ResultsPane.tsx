@@ -5,7 +5,7 @@
  * collapsible disclosure.
  */
 import * as React from "react";
-import { useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Button } from "@blueprintjs/core";
 import { StateRef } from "oneref";
 import {
@@ -303,12 +303,94 @@ const ResultEntryView: React.FunctionComponent<{
   );
 };
 
+// smallest useful results pane, and the space we always leave for the grid
+const MIN_RESULTS_HEIGHT = 120;
+const MIN_GRID_HEIGHT = 160;
+
+const clamp = (v: number, lo: number, hi: number) =>
+  Math.min(Math.max(v, lo), Math.max(lo, hi));
+
 export const ResultsPane: React.FunctionComponent<ResultsPaneProps> = ({
   appState,
   stateRef,
 }: ResultsPaneProps) => {
   const entries = appState.commandResults.toArray();
   const scrollRef = useRef<HTMLDivElement | null>(null);
+  const paneRef = useRef<HTMLDivElement | null>(null);
+  // null == use the CSS default height; a number means the user has dragged
+  const [height, setHeight] = useState<number | null>(null);
+  const [dragging, setDragging] = useState(false);
+  const dragStart = useRef<{ y: number; h: number } | null>(null);
+
+  // a dragged height can outgrow the window; re-clamp when it shrinks
+  const userSized = height != null;
+  useEffect(() => {
+    if (!userSized) {
+      return;
+    }
+    const onWindowResize = () => {
+      const parent = paneRef.current?.parentElement;
+      if (parent == null) {
+        return;
+      }
+      setHeight((h) =>
+        h == null
+          ? h
+          : clamp(h, MIN_RESULTS_HEIGHT, parent.clientHeight - MIN_GRID_HEIGHT)
+      );
+    };
+    window.addEventListener("resize", onWindowResize);
+    return () => window.removeEventListener("resize", onWindowResize);
+  }, [userSized]);
+
+  const onResizePointerDown = useCallback(
+    (e: React.PointerEvent<HTMLDivElement>) => {
+      const pane = paneRef.current;
+      if (pane == null || e.button !== 0) {
+        return;
+      }
+      e.preventDefault();
+      // jsdom (tests) has no pointer capture API
+      e.currentTarget.setPointerCapture?.(e.pointerId);
+      dragStart.current = {
+        y: e.clientY,
+        h: pane.getBoundingClientRect().height,
+      };
+      setDragging(true);
+    },
+    []
+  );
+
+  const onResizePointerMove = useCallback(
+    (e: React.PointerEvent<HTMLDivElement>) => {
+      const start = dragStart.current;
+      const pane = paneRef.current;
+      if (start == null || pane == null) {
+        return;
+      }
+      const parent = pane.parentElement;
+      const maxHeight =
+        parent != null
+          ? parent.clientHeight - MIN_GRID_HEIGHT
+          : window.innerHeight - MIN_GRID_HEIGHT;
+      // dragging up (smaller clientY) grows the pane
+      setHeight(
+        clamp(start.h + (start.y - e.clientY), MIN_RESULTS_HEIGHT, maxHeight)
+      );
+    },
+    []
+  );
+
+  const endResize = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+    if (dragStart.current == null) {
+      return;
+    }
+    if (e.currentTarget.hasPointerCapture?.(e.pointerId)) {
+      e.currentTarget.releasePointerCapture(e.pointerId);
+    }
+    dragStart.current = null;
+    setDragging(false);
+  }, []);
 
   // keep the newest entry visible as results append
   useEffect(() => {
@@ -323,7 +405,29 @@ export const ResultsPane: React.FunctionComponent<ResultsPaneProps> = ({
   }
 
   return (
-    <div className="command-results-pane" data-testid="results-pane">
+    <div
+      className="command-results-pane"
+      data-testid="results-pane"
+      ref={paneRef}
+      style={height == null ? undefined : { height, maxHeight: "none" }}
+    >
+      <div
+        className={
+          "results-pane-resizer" + (dragging ? " results-pane-resizer-active" : "")
+        }
+        data-testid="results-pane-resizer"
+        role="separator"
+        aria-orientation="horizontal"
+        aria-label="Resize results pane"
+        title="Drag to resize (double-click to reset)"
+        onPointerDown={onResizePointerDown}
+        onPointerMove={onResizePointerMove}
+        onPointerUp={endResize}
+        onPointerCancel={endResize}
+        onDoubleClick={() => setHeight(null)}
+      >
+        <span className="results-pane-resizer-grip" />
+      </div>
       <div className="results-pane-header">
         <span className="results-pane-title">Results</span>
         <div className="results-pane-actions">

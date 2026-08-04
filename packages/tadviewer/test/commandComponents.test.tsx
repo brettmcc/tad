@@ -505,6 +505,54 @@ describe("ResultsPane", () => {
     expect(entries[0].textContent).toContain("sum a");
     expect(entries[1].textContent).toContain("sum nope");
   });
+
+  test("dragging the resizer sets an explicit pane height", async () => {
+    renderHarness();
+    fireEvent.click(screen.getByTestId("results-toggle-button"));
+    const pane = screen.getByTestId("results-pane");
+    // jsdom has no layout: fake the pane's current height and the space
+    // available in the enclosing pane
+    jest
+      .spyOn(pane, "getBoundingClientRect")
+      .mockReturnValue({ height: 200 } as DOMRect);
+    Object.defineProperty(pane.parentElement!, "clientHeight", {
+      configurable: true,
+      value: 800,
+    });
+
+    const resizer = screen.getByTestId("results-pane-resizer");
+    // jsdom has no PointerEvent, and fireEvent.pointerDown then drops
+    // clientY/button -- dispatch MouseEvents with pointer type names instead
+    const drag = (fromY: number, toY: number) => {
+      fireEvent(
+        resizer,
+        new MouseEvent("pointerdown", {
+          bubbles: true,
+          button: 0,
+          clientY: fromY,
+        })
+      );
+      fireEvent(
+        resizer,
+        new MouseEvent("pointermove", { bubbles: true, clientY: toY })
+      );
+      fireEvent(
+        resizer,
+        new MouseEvent("pointerup", { bubbles: true, clientY: toY })
+      );
+    };
+
+    drag(400, 340); // drag up => taller
+    expect(pane.style.height).toBe("260px");
+
+    // dragging down past the minimum clamps rather than collapsing
+    drag(400, 900);
+    expect(pane.style.height).toBe("120px");
+
+    // double-click restores the default (CSS-driven) height
+    fireEvent.doubleClick(resizer);
+    expect(pane.style.height).toBe("");
+  });
 });
 
 describe("command helpers", () => {
