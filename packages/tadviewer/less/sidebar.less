@@ -4,6 +4,7 @@
   display: inherit;
   flex: 0 0 auto;
   height: 100%;
+  position: relative;
   transition-duration: 0.3s;
   overflow: none;
 }
@@ -14,16 +15,43 @@
   border-right: none;
 }
 
+/* width is set inline while expanded (drag-resizable); these are the
+   defaults used before any resize */
 .sidebar-expanded {
   width: 340px;
   min-width: 340px;
 }
 
+/* no width animation while the user is dragging the handle */
+.sidebar-dragging {
+  transition-duration: 0s;
+}
+
+.main-container:has(.sidebar-dragging) {
+  cursor: col-resize;
+  user-select: none;
+}
+
+.sidebar-resize-handle {
+  position: absolute;
+  top: 0;
+  right: -3px;
+  width: 7px;
+  height: 100%;
+  cursor: col-resize;
+  z-index: 5;
+}
+
+.sidebar-resize-handle:hover,
+.sidebar-dragging > .sidebar-resize-handle {
+  background-color: var(--tad-accent);
+  opacity: 0.6;
+}
+
 .sidebar-content {
   visibility: hidden;
   height: 100%;
-  width: 340px;
-  min-width: 340px;
+  width: 100%;
   overflow-y: auto;
   overflow-x: hidden;
 }
@@ -32,7 +60,6 @@
   margin-left: 8px;
   margin-top: 8px;
   margin-right: 16px;
-  width: 300px;
 }
 
 .sidebar-placeholder {
