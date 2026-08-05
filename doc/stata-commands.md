@@ -8,8 +8,7 @@ API, and record their generated SQL in the results pane.
 ## Command bar controls
 
 - Press **Enter** or click **Run** to execute.
-- Press **Up/Down** to navigate command history.
-- Press **PageUp** to recall the last submitted command.
+- Press **Up/Down** or **PageUp/PageDown** to navigate command history.
 - Press **Tab** after a partial variable name to complete it. Repeated Tab
   cycles through matches. Names that require quoting are wrapped in backticks.
 - Click **Break** to interrupt a running DuckDB query.

@@ -179,17 +179,6 @@ export const CommandBar: React.FunctionComponent<CommandBarProps> = ({
     setCompletionMenu(null);
   };
 
-  const recallLastCommand = () => {
-    if (history.length === 0) {
-      return;
-    }
-    draftRef.current = inputValue;
-    const nextIndex = history.length - 1;
-    setHistIndex(nextIndex);
-    setInputValue(history[nextIndex]);
-    setCompletionMenu(null);
-  };
-
   const acceptCompletion = (menu: CompletionMenu, index: number) => {
     const rendered = formatVariableForCommand(menu.matches[index]);
     setInputWithCaret(
@@ -282,7 +271,10 @@ export const CommandBar: React.FunctionComponent<CommandBarProps> = ({
       navigateHistory(1);
     } else if (e.key === "PageUp") {
       e.preventDefault();
-      recallLastCommand();
+      navigateHistory(-1);
+    } else if (e.key === "PageDown") {
+      e.preventDefault();
+      navigateHistory(1);
     } else if (e.key === "Tab") {
       const target = e.currentTarget;
       if (completeVariable(target.selectionStart ?? inputValue.length)) {

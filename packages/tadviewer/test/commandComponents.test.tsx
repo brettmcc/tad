@@ -234,17 +234,29 @@ describe("CommandBar", () => {
     );
   });
 
-  test("PageUp recalls the last submitted command", async () => {
+  test("PageUp/PageDown step through the whole command history", async () => {
     renderHarness();
-    const input = typeCommand("sum a");
+    let input = typeCommand("sum a");
     await act(async () => {
       fireEvent.keyDown(input, { key: "Enter" });
     });
     await screen.findByTestId("result-entry");
+
+    input = typeCommand("sum b");
+    await act(async () => {
+      fireEvent.keyDown(input, { key: "Enter" });
+    });
+    await waitFor(() =>
+      expect(screen.getAllByTestId("result-entry").length).toBe(2)
+    );
     expect(input.value).toBe("");
 
     fireEvent.keyDown(input, { key: "PageUp" });
+    expect(input.value).toBe("sum b");
+    fireEvent.keyDown(input, { key: "PageUp" });
     expect(input.value).toBe("sum a");
+    fireEvent.keyDown(input, { key: "PageDown" });
+    expect(input.value).toBe("sum b");
   });
 
   test("Tab completes variables and quotes names that need it", () => {
