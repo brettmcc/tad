@@ -150,7 +150,7 @@ export class FSDriver implements DbDriver {
       try {
         const rows: Row[] = await this.dbc.runSqlQuery(
           `SELECT CAST(sum(total_uncompressed_size) AS DOUBLE) AS est
-           FROM parquet_metadata('${targetPath.replace(/'/g, "''")}')`
+           FROM parquet_metadata(${reltabDuckDB.duckDbPathLiteral(targetPath)})`
         );
         const est = rows[0]?.est;
         if (typeof est === "number" && est > 0) {

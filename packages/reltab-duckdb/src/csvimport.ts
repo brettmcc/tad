@@ -12,6 +12,7 @@ import {
   execStatements,
   queryRows,
 } from "./duckdbAdapter";
+import { duckDbPathLiteral } from "./dbPath";
 import { initS3 } from "./s3utils";
 let uniqMap: { [cid: string]: number } = {};
 
@@ -90,7 +91,7 @@ export const nativeCSVImport = async (
       tableName = genTableName(filePath);
     }
     const mkImportQuery = (opts: string[]): string => {
-      const args = [`'${filePath}'`, ...opts].join(", ");
+      const args = [duckDbPathLiteral(filePath), ...opts].join(", ");
       return `CREATE OR REPLACE TABLE ${tableName} AS SELECT * FROM read_csv_auto(${args})`;
     };
     try {
@@ -150,7 +151,9 @@ export const nativeParquetImport = async (
     if (!tableName) {
       tableName = genTableName(filePath);
     }
-    const query = `CREATE OR REPLACE VIEW ${tableName} AS SELECT * FROM parquet_scan('${filePath}')`;
+    const query = `CREATE OR REPLACE VIEW ${tableName} AS SELECT * FROM parquet_scan(${duckDbPathLiteral(
+      filePath
+    )})`;
     log.debug("*** parquet import: ", query);
     try {
       // Creating a view doesn't return a useful result.
@@ -222,7 +225,9 @@ export const dematerializeParquetTable = async (
       dbConn,
       `BEGIN TRANSACTION;
        DROP TABLE ${tableName};
-       CREATE VIEW ${tableName} AS SELECT * FROM parquet_scan('${filePath}');
+       CREATE VIEW ${tableName} AS SELECT * FROM parquet_scan(${duckDbPathLiteral(
+         filePath
+       )});
        COMMIT;`
     );
   } finally {

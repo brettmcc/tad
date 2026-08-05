@@ -34,6 +34,7 @@ import {
 import { initS3 } from "./s3utils";
 
 export * from "./csvimport";
+export * from "./dbPath";
 export {
   DuckDBDatabase,
   DuckDBConnection,
