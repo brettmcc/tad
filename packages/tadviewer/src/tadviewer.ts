@@ -30,6 +30,7 @@ export * from "./components/AppPane";
 export * from "./components/CellContentBar";
 export * from "./components/CommandBar";
 export * from "./components/ResultsPane";
+export * from "./errorToast";
 export * from "./PivotRequester";
 export * from "./ViewParams";
 export * as stataCommand from "./stataCommand";

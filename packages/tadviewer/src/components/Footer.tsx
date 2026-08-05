@@ -1,16 +1,10 @@
 import * as React from "react";
-import {
-  Alert,
-  Icon,
-  OverlayToaster,
-  Position,
-  Switch,
-  ToasterInstance,
-} from "@blueprintjs/core";
+import { Alert, Icon, Switch } from "@blueprintjs/core";
 import * as reltab from "reltab";
 import * as actions from "../actions";
 import { FilterEditor } from "./FilterEditor";
 import { AppState } from "../AppState";
+import { showErrorToast } from "../errorToast";
 import { ViewState } from "../ViewState";
 import { StateRef } from "oneref";
 import { useEffect, useState } from "react";
@@ -32,14 +26,6 @@ const PREFLIGHT_FREE_MEM_FRACTION = 0.8;
  * fraction of total while a dataset is held in memory.
  */
 const LOW_FREE_MEM_FRACTION = 0.1;
-
-let footerToaster: ToasterInstance | null = null;
-function showErrorToast(message: string): void {
-  if (footerToaster == null) {
-    footerToaster = OverlayToaster.create({ position: Position.TOP });
-  }
-  footerToaster.show({ intent: "danger", icon: "error", message });
-}
 
 export function formatByteSize(bytes: number): string {
   if (bytes < 1024) {

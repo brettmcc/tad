@@ -25,6 +25,7 @@ import {
   DataSourceConnection,
 } from "reltab";
 import { actions } from "../tadviewer";
+import { errorMessage, showErrorToast } from "../errorToast";
 
 export interface DataSourceSidebarProps {
   expanded: boolean;
@@ -226,8 +227,16 @@ export const DataSourceSidebar: React.FC<DataSourceSidebarProps> = ({
   };
   const handleNodeExpand = async (treeNode: DSTreeNodeInfo) => {
     const { dsPath, dsc, dsNode } = treeNode.nodeData!;
-    const appState = mutableGet(stateRef);
-    const childNodes = await dsc.getChildren(dsPath);
+    let childNodes: DataSourceNode[];
+    try {
+      childNodes = await dsc.getChildren(dsPath);
+    } catch (err) {
+      // an unreadable directory left the node stuck half-open with no
+      // indication of why
+      log.error("error listing data source children: ", err);
+      showErrorToast(errorMessage(err));
+      return;
+    }
     treeNode.childNodes = childNodes.map((childNode) => {
       const childPath = extendDSPath(dsPath, childNode.id);
       return dsNodeTreeNode(dsc, childPath, childNode);
@@ -243,7 +252,12 @@ export const DataSourceSidebar: React.FC<DataSourceSidebarProps> = ({
   ) => {
     const { dsPath, dsNode } = treeNode.nodeData!;
     if (dsNode.kind === "Table" || dsNode.kind === "File") {
-      actions.openDataSourcePath(dsPath, stateRef);
+      // a file DuckDB can't import rejects here; without the catch the
+      // click just left the previous grid in place
+      actions.openDataSourcePath(dsPath, stateRef).catch((err) => {
+        log.error("error opening data source path: ", err);
+        showErrorToast(errorMessage(err));
+      });
     }
     if (selectedNode != null) {
       selectedNode.isSelected = false;
