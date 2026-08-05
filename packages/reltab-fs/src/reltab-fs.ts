@@ -26,8 +26,8 @@ import {
 import * as reltabDuckDB from "reltab-duckdb";
 import { DuckDBDriver } from "reltab-duckdb";
 
-export { dataFileExtensions, isIPFSPath } from "./defs";
-import { dataFileExtensions, isIPFSPath } from "./defs";
+export { dataFileExtensions, isIPFSPath, matchDataFileExtension } from "./defs";
+import { isIPFSPath, matchDataFileExtension } from "./defs";
 
 interface ImportedFileInfo {
   baseName: string;
@@ -55,17 +55,9 @@ async function getDuckDBDriver(): Promise<DuckDBDriver> {
   return _duckDBDriver;
 }
 
-// our own impl of path.extName that uses the first '.'
-// (rather than last '.') to allow for extensions
-// like '.csv.gz':
-function extNameEx(path: string): string {
-  const dotIndex = path.indexOf(".");
-  if (dotIndex === -1) {
-    return "";
-  }
-  const ext = path.slice(dotIndex);
-  return ext;
-}
+/** Recognize parquet by suffix, so `<name>.snappy.parquet` counts too. */
+const isParquetPath = (fsPath: string): boolean =>
+  matchDataFileExtension(fsPath) === "parquet";
 
 interface ImportInfo {
   tableName: string; // table name used to import this table
@@ -126,7 +118,7 @@ export class FSDriver implements DbDriver {
     const canMaterialize =
       !this.isIPFS &&
       importInfo !== undefined &&
-      path.extname(targetPath) === ".parquet";
+      isParquetPath(targetPath);
     const materialized = importInfo?.materialized === true;
     return {
       sourceSizeBytes,
@@ -146,7 +138,7 @@ export class FSDriver implements DbDriver {
   ): Promise<MaterializeEstimate> {
     const targetPath = this.getTargetPath(dsPath);
     let estimatedBytes: number | null = null;
-    if (!this.isIPFS && path.extname(targetPath) === ".parquet") {
+    if (!this.isIPFS && isParquetPath(targetPath)) {
       try {
         const rows: Row[] = await this.dbc.runSqlQuery(
           `SELECT CAST(sum(total_uncompressed_size) AS DOUBLE) AS est
@@ -175,7 +167,7 @@ export class FSDriver implements DbDriver {
     // ensure the file has been imported (also handles stale re-import)
     await this.getTableName(dsPath);
     const importInfo = this.importMap[targetPath];
-    if (this.isIPFS || path.extname(targetPath) !== ".parquet") {
+    if (this.isIPFS || !isParquetPath(targetPath)) {
       throw new Error(
         "setMaterialized: only local parquet files can be loaded into memory"
       );
@@ -229,19 +221,9 @@ export class FSDriver implements DbDriver {
     const dirEnts = await fs.promises.readdir(targetPath, {
       withFileTypes: true,
     });
-    const dataEnts = dirEnts.filter((ent) => {
-      const isDir = ent.isDirectory();
-      if (isDir) {
-        return true;
-      }
-      const extName = extNameEx(ent.name);
-      if (extName !== "") {
-        const ext = extName.slice(1);
-        const index = dataFileExtensions.findIndex((dext) => dext === ext);
-        return index !== -1;
-      }
-      return false;
-    });
+    const dataEnts = dirEnts.filter(
+      (ent) => ent.isDirectory() || matchDataFileExtension(ent.name) !== null
+    );
     const childNodes = dataEnts.map((ent) => {
       const isDir = ent.isDirectory();
       const node: DataSourceNode = {
@@ -266,8 +248,7 @@ export class FSDriver implements DbDriver {
         ", importing..."
       );
       let tableName: string;
-      const extName = path.extname(targetPath);
-      if (extName === ".parquet") {
+      if (isParquetPath(targetPath)) {
         tableName = await reltabDuckDB.nativeParquetImport(
           this.dbc.db,
           targetPath
@@ -297,9 +278,8 @@ export class FSDriver implements DbDriver {
             targetPath,
             fileStats.mtime
           );
-          const extName = path.extname(targetPath);
           const tableName = importInfo.tableName;
-          if (extName === ".parquet") {
+          if (isParquetPath(targetPath)) {
             if (importInfo.materialized) {
               // drop the stale in-memory copy (restoring the view over
               // the updated file), then re-materialize from it
@@ -346,7 +326,7 @@ export class FSDriver implements DbDriver {
   async dispose(): Promise<void> {
     for (const [targetPath, importInfo] of Object.entries(this.importMap)) {
       const isView =
-        path.extname(targetPath) === ".parquet" && !importInfo.materialized;
+        isParquetPath(targetPath) && !importInfo.materialized;
       const dropStmt = `DROP ${isView ? "VIEW" : "TABLE"} IF EXISTS ${
         importInfo.tableName
       }`;
