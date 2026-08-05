@@ -180,6 +180,62 @@
   color: var(--tad-subtle);
 }
 
+.results-find-bar {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  border-bottom: 1px solid var(--tad-border);
+  background: var(--tad-chrome);
+}
+
+.results-find-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  max-width: 320px;
+  padding: 3px 8px;
+  color: var(--tad-fg);
+  background: var(--tad-field-bg);
+  border: 1px solid var(--tad-field-border);
+  border-radius: 4px;
+  font-size: 12px;
+  outline: none;
+  caret-color: var(--tad-accent);
+}
+
+.results-find-input::placeholder {
+  color: var(--tad-subtle);
+}
+
+.results-find-input:focus {
+  border-color: var(--tad-accent);
+  box-shadow: 0 0 0 2px var(--tad-focus-ring);
+}
+
+.results-find-count {
+  flex: 0 0 auto;
+  min-width: 66px;
+  color: var(--tad-subtle);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.results-find-count-empty {
+  color: var(--tad-error-fg);
+}
+
+/* CSS Custom Highlight API ranges painted by ResultsPane's find bar */
+::highlight(tad-find) {
+  background-color: rgba(108, 164, 248, 0.28);
+  color: var(--tad-fg);
+}
+
+::highlight(tad-find-active) {
+  background-color: #f0a83c;
+  color: #14161a;
+}
+
 .results-pane-scroll {
   flex: 1 1 auto;
   overflow-y: auto;

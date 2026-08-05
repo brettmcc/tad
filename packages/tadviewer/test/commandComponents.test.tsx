@@ -565,6 +565,52 @@ describe("ResultsPane", () => {
     fireEvent.doubleClick(resizer);
     expect(pane.style.height).toBe("");
   });
+
+  test("Ctrl+F opens a find bar that counts and steps through matches", async () => {
+    renderHarness();
+    const input = typeCommand("sum a");
+    fireEvent.keyDown(input, { key: "Enter" });
+    await screen.findByTestId("result-entry");
+
+    expect(screen.queryByTestId("results-find-bar")).toBeNull();
+    fireEvent.keyDown(window, { key: "f", ctrlKey: true });
+    const findInput = (await screen.findByTestId(
+      "results-find-input"
+    )) as HTMLInputElement;
+
+    // "sum a" appears in the echoed command line, and "a" in several cells
+    fireEvent.change(findInput, { target: { value: "sum" } });
+    const count = screen.getByTestId("results-find-count");
+    await waitFor(() => expect(count.textContent).toMatch(/^1 of [1-9]/));
+    const total = Number(count.textContent!.split(" of ")[1]);
+    expect(total).toBeGreaterThan(0);
+
+    fireEvent.keyDown(findInput, { key: "Enter" });
+    expect(count.textContent).toBe(`${(1 % total) + 1} of ${total}`);
+    // wraps backwards from the first match
+    fireEvent.keyDown(findInput, { key: "Enter", shiftKey: true });
+    expect(count.textContent).toBe(`1 of ${total}`);
+    fireEvent.click(screen.getByTestId("results-find-prev"));
+    expect(count.textContent).toBe(`${total} of ${total}`);
+
+    fireEvent.change(findInput, { target: { value: "zzzznotthere" } });
+    await waitFor(() =>
+      expect(screen.getByTestId("results-find-count").textContent).toBe(
+        "No results"
+      )
+    );
+
+    fireEvent.keyDown(findInput, { key: "Escape" });
+    expect(screen.queryByTestId("results-find-bar")).toBeNull();
+  });
+
+  test("Ctrl+F opens the results pane when it is hidden", async () => {
+    const stateRef = renderHarness();
+    expect(screen.queryByTestId("results-pane")).toBeNull();
+    fireEvent.keyDown(window, { key: "f", ctrlKey: true });
+    expect(mutableGet(stateRef).resultsPaneOpen).toBe(true);
+    expect(await screen.findByTestId("results-find-input")).not.toBeNull();
+  });
 });
 
 describe("command helpers", () => {

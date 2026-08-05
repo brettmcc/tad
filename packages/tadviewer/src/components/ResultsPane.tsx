@@ -310,6 +310,72 @@ const MIN_GRID_HEIGHT = 160;
 const clamp = (v: number, lo: number, hi: number) =>
   Math.min(Math.max(v, lo), Math.max(lo, hi));
 
+/**
+ * Ctrl+F support: we highlight matches with the CSS Custom Highlight API
+ * rather than wrapping text in <mark> elements, so React's DOM stays
+ * untouched. Chromium has it since 105; jsdom (tests) does not, so every
+ * use is feature-guarded and find still navigates without it.
+ */
+const HIGHLIGHT_ALL = "tad-find";
+const HIGHLIGHT_ACTIVE = "tad-find-active";
+
+const highlightRegistry = (): any => {
+  const cssObj: any = typeof CSS === "undefined" ? null : CSS;
+  return cssObj?.highlights ?? null;
+};
+
+const clearHighlights = () => {
+  const registry = highlightRegistry();
+  if (registry != null) {
+    registry.delete(HIGHLIGHT_ALL);
+    registry.delete(HIGHLIGHT_ACTIVE);
+  }
+};
+
+const setHighlights = (matches: Range[], activeIndex: number) => {
+  const registry = highlightRegistry();
+  const HighlightCtor: any = (window as any).Highlight;
+  if (registry == null || HighlightCtor == null) {
+    return;
+  }
+  const others = matches.filter((_, i) => i !== activeIndex);
+  registry.set(HIGHLIGHT_ALL, new HighlightCtor(...others));
+  const active = matches[activeIndex];
+  if (active !== undefined) {
+    registry.set(HIGHLIGHT_ACTIVE, new HighlightCtor(active));
+  } else {
+    registry.delete(HIGHLIGHT_ACTIVE);
+  }
+};
+
+/** All ranges in `root` matching `query`, case-insensitively, in document order. */
+export function collectMatches(root: HTMLElement, query: string): Range[] {
+  const needle = query.toLowerCase();
+  if (needle === "") {
+    return [];
+  }
+  const matches: Range[] = [];
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+  let node = walker.nextNode();
+  while (node != null) {
+    const parent = node.parentElement;
+    // text inside a collapsed <details> (the SQL disclosure) isn't visible
+    if (parent != null && parent.closest("details:not([open])") == null) {
+      const hay = (node.nodeValue ?? "").toLowerCase();
+      let from = hay.indexOf(needle);
+      while (from !== -1) {
+        const range = document.createRange();
+        range.setStart(node, from);
+        range.setEnd(node, from + needle.length);
+        matches.push(range);
+        from = hay.indexOf(needle, from + needle.length);
+      }
+    }
+    node = walker.nextNode();
+  }
+  return matches;
+}
+
 export const ResultsPane: React.FunctionComponent<ResultsPaneProps> = ({
   appState,
   stateRef,
@@ -321,6 +387,14 @@ export const ResultsPane: React.FunctionComponent<ResultsPaneProps> = ({
   const [height, setHeight] = useState<number | null>(null);
   const [dragging, setDragging] = useState(false);
   const dragStart = useRef<{ y: number; h: number } | null>(null);
+  // find-in-results state; the ranges themselves live in a ref since they're
+  // DOM objects, not renderable state
+  const [findOpen, setFindOpen] = useState(false);
+  const [findQuery, setFindQuery] = useState("");
+  const [matchCount, setMatchCount] = useState(0);
+  const [activeMatch, setActiveMatch] = useState(0);
+  const matchesRef = useRef<Range[]>([]);
+  const findInputRef = useRef<HTMLInputElement | null>(null);
 
   // a dragged height can outgrow the window; re-clamp when it shrinks
   const userSized = height != null;
@@ -400,6 +474,99 @@ export const ResultsPane: React.FunctionComponent<ResultsPaneProps> = ({
     }
   }, [entries.length]);
 
+  const resultsPaneOpen = appState.resultsPaneOpen;
+
+  // Ctrl+F (Cmd+F on mac) opens the find bar, opening the pane if needed
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && !e.altKey && e.key.toLowerCase() === "f") {
+        e.preventDefault();
+        if (!resultsPaneOpen) {
+          commandActions.setResultsPaneOpen(true, stateRef);
+        }
+        setFindOpen(true);
+        findInputRef.current?.select();
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [resultsPaneOpen, stateRef]);
+
+  // focus the find input when the bar first appears
+  useEffect(() => {
+    if (findOpen) {
+      findInputRef.current?.focus();
+      findInputRef.current?.select();
+    }
+  }, [findOpen]);
+
+  // a new search term always starts from the first match
+  useEffect(() => {
+    setActiveMatch(0);
+  }, [findQuery]);
+
+  // (re)scan the rendered results whenever the term or the results change
+  useEffect(() => {
+    const el = scrollRef.current;
+    const matches =
+      findOpen && el != null ? collectMatches(el, findQuery) : [];
+    matchesRef.current = matches;
+    setMatchCount(matches.length);
+    setActiveMatch((a) => (matches.length === 0 ? 0 : Math.min(a, matches.length - 1)));
+  }, [findOpen, findQuery, entries.length, resultsPaneOpen]);
+
+  // paint the highlights and keep the current match on screen
+  useEffect(() => {
+    const matches = matchesRef.current;
+    setHighlights(matches, activeMatch);
+    const el = scrollRef.current;
+    const range = matches[activeMatch];
+    if (el == null || range == null || range.getBoundingClientRect == null) {
+      return;
+    }
+    const rect = range.getBoundingClientRect();
+    const viewRect = el.getBoundingClientRect();
+    if (rect.top < viewRect.top) {
+      el.scrollTop -= viewRect.top - rect.top + 24;
+    } else if (rect.bottom > viewRect.bottom) {
+      el.scrollTop += rect.bottom - viewRect.bottom + 24;
+    }
+  }, [matchCount, activeMatch, findQuery]);
+
+  // never leave stale highlights behind
+  useEffect(() => clearHighlights, []);
+
+  const closeFind = useCallback(() => {
+    setFindOpen(false);
+    setFindQuery("");
+    matchesRef.current = [];
+    setMatchCount(0);
+    clearHighlights();
+  }, []);
+
+  const stepMatch = useCallback(
+    (delta: number) => {
+      setActiveMatch((a) => {
+        const n = matchesRef.current.length;
+        return n === 0 ? 0 : (a + delta + n) % n;
+      });
+    },
+    []
+  );
+
+  const onFindKeyDown = useCallback(
+    (e: React.KeyboardEvent<HTMLInputElement>) => {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        stepMatch(e.shiftKey ? -1 : 1);
+      } else if (e.key === "Escape") {
+        e.preventDefault();
+        closeFind();
+      }
+    },
+    [stepMatch, closeFind]
+  );
+
   if (!appState.resultsPaneOpen) {
     return null;
   }
@@ -434,6 +601,15 @@ export const ResultsPane: React.FunctionComponent<ResultsPaneProps> = ({
           <Button
             small={true}
             minimal={true}
+            icon="search"
+            title="Find in results (Ctrl+F)"
+            active={findOpen}
+            onClick={() => (findOpen ? closeFind() : setFindOpen(true))}
+            data-testid="results-find-button"
+          />
+          <Button
+            small={true}
+            minimal={true}
             disabled={entries.length === 0}
             onClick={() => commandActions.clearCommandResults(stateRef)}
             data-testid="results-clear-button"
@@ -450,6 +626,62 @@ export const ResultsPane: React.FunctionComponent<ResultsPaneProps> = ({
           />
         </div>
       </div>
+      {findOpen ? (
+        <div className="results-find-bar" data-testid="results-find-bar">
+          <input
+            className="results-find-input"
+            type="text"
+            placeholder="Find in results"
+            spellCheck={false}
+            value={findQuery}
+            ref={findInputRef}
+            onChange={(e) => setFindQuery(e.target.value)}
+            onKeyDown={onFindKeyDown}
+            data-testid="results-find-input"
+          />
+          <span
+            className={
+              "results-find-count" +
+              (findQuery !== "" && matchCount === 0
+                ? " results-find-count-empty"
+                : "")
+            }
+            data-testid="results-find-count"
+          >
+            {findQuery === ""
+              ? ""
+              : matchCount === 0
+              ? "No results"
+              : `${activeMatch + 1} of ${matchCount}`}
+          </span>
+          <Button
+            small={true}
+            minimal={true}
+            icon="chevron-up"
+            title="Previous match (Shift+Enter)"
+            disabled={matchCount === 0}
+            onClick={() => stepMatch(-1)}
+            data-testid="results-find-prev"
+          />
+          <Button
+            small={true}
+            minimal={true}
+            icon="chevron-down"
+            title="Next match (Enter)"
+            disabled={matchCount === 0}
+            onClick={() => stepMatch(1)}
+            data-testid="results-find-next"
+          />
+          <Button
+            small={true}
+            minimal={true}
+            icon="cross"
+            title="Close find (Esc)"
+            onClick={closeFind}
+            data-testid="results-find-close"
+          />
+        </div>
+      ) : null}
       <div className="results-pane-scroll" ref={scrollRef}>
         {entries.length === 0 ? (
           <div className="results-pane-empty">
