@@ -99,6 +99,50 @@ const encodeFileOpenParams = (targetPath: string): OpenParams => {
   return openParams;
 };
 
+// Same step and limits the built-in zoomIn / zoomOut menu roles use:
+const ZOOM_STEP = 0.5;
+const MIN_ZOOM_LEVEL = -8;
+const MAX_ZOOM_LEVEL = 9;
+
+/*
+ * The View menu's zoom accelerators only match one spelling of each key, so
+ * e.g. "Ctrl +" typed as Ctrl+= or on the numeric keypad never reaches the
+ * menu. Handle the remaining spellings here; keys the menu accelerator does
+ * claim are swallowed before before-input-event fires, so this can't
+ * double-apply.
+ */
+const installZoomKeyHandler = (win: BrowserWindow) => {
+  win.webContents.on("before-input-event", (event, input) => {
+    if (input.type !== "keyDown" || input.alt) {
+      return;
+    }
+    const cmdOrCtrl = process.platform === "darwin" ? input.meta : input.control;
+    if (!cmdOrCtrl) {
+      return;
+    }
+    let delta: number | null = null;
+    if (input.key === "+" || input.key === "=") {
+      delta = ZOOM_STEP;
+    } else if (input.key === "-" || input.key === "_") {
+      delta = -ZOOM_STEP;
+    } else if (input.key !== "0") {
+      return;
+    }
+
+    const wc = win.webContents;
+    if (delta === null) {
+      wc.setZoomLevel(0);
+    } else {
+      const level = Math.min(
+        MAX_ZOOM_LEVEL,
+        Math.max(MIN_ZOOM_LEVEL, wc.getZoomLevel() + delta)
+      );
+      wc.setZoomLevel(level);
+    }
+    event.preventDefault();
+  });
+};
+
 const create = async (openParams: OpenParams): Promise<BrowserWindow> => {
   let winProps = {
     width: 1280,
@@ -124,6 +168,8 @@ const create = async (openParams: OpenParams): Promise<BrowserWindow> => {
 
   const win = new BrowserWindow(winProps);
   profLog("BrowserWindow created");
+
+  installZoomKeyHandler(win);
 
   if (openCount === 0) {
     // first window:
