@@ -14,6 +14,9 @@ API, and record their generated SQL in the results pane.
 - Click **Break** to interrupt a running DuckDB query.
 - Click **Results** or press **Ctrl+`** to toggle the append-only results pane.
 - Click **Clear** in the results pane to clear command history.
+- Press **Ctrl+F** (or click the magnifier in the results pane header) to search
+  the results. **Enter**/**Shift+Enter** step through matches, **Esc** closes the
+  find bar.
 
 The command input is disabled while a command is running. Failed commands keep
 their text in the input for correction.
