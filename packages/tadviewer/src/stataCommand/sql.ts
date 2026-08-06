@@ -765,7 +765,7 @@ function planCodebook(
   ctx: PlanContext
 ): CodebookPlan {
   const from = fromClause(ctx);
-  const where = whereClause(undefined, ctx);
+  const where = whereClause(cmd.filter, ctx);
   const statCols: string[] = [];
   const variables = cmd.variables.map((colId, idx): CodebookVarPlan => {
     const q = ctx.dialect.quoteCol(colId);
@@ -796,7 +796,7 @@ function planCodebook(
       `       count(*) AS freq`,
       from,
     ];
-    const topWhere = whereClause(undefined, ctx, `${q} IS NOT NULL`);
+    const topWhere = whereClause(cmd.filter, ctx, `${q} IS NOT NULL`);
     if (topWhere !== "") {
       topLines.push(topWhere);
     }

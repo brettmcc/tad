@@ -28,7 +28,7 @@ their text in the input for correction.
 | `browse` | `bro[wse] [varlist] [if expr]` | Show selected columns and an optional one-off filter in the main grid. |
 | `summarize` | `sum[marize] [varlist] [if expr] [, detail]` | N, mean, sample standard deviation, min, and max. Date/timestamp variables report mean/min/max as dates and the standard deviation in days. `detail` adds exact percentiles, extremes, variance, skewness, kurtosis, and sum for numeric variables. |
 | `tabulate` | `tab[ulate] var [if expr] [, missing]` | One-way frequencies, percent, and cumulative percent. Nulls are excluded unless `missing` is given. |
-| `codebook` | `codebook [varlist]` | Type, N, missing, distinct, and min/max or top values. |
+| `codebook` | `codebook [varlist] [if expr]` | Type, N, missing, distinct, and min/max or top values. |
 | `describe` | `des[cribe] [varlist]` | Observation count plus variable names and SQL types. |
 | `ds` | `ds [varlist]` | List resolved variable names without querying DuckDB. |
 | `list` | `list [varlist] [if expr]` | Display the first 200 matching rows. |

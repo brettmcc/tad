@@ -10,7 +10,7 @@
  *   browseCmd    := BROWSE varlist? ifClause?
  *   summarizeCmd := SUM varlist? ifClause? options?      -- option: d[etail]
  *   tabulateCmd  := TAB varname ifClause? options?       -- option: m[issing]
- *   codebookCmd  := CODEBOOK varlist?
+ *   codebookCmd  := CODEBOOK varlist? ifClause?
  *   describeCmd  := DESCRIBE varlist?
  *   dsCmd        := DS varlist?
  *   listCmd      := LIST varlist? ifClause?
@@ -246,10 +246,12 @@ class Parser {
       }
       case "codebook": {
         const variables = this.parseVarlist();
-        this.rejectIfClause("codebook");
+        const filter = this.parseOptionalIf();
         this.expectNoOptions("codebook");
         this.expectEof();
-        return { kind, variables };
+        return filter === undefined
+          ? { kind, variables }
+          : { kind, variables, filter };
       }
       case "describe": {
         const variables = this.parseVarlist();

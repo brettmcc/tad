@@ -59,7 +59,7 @@ export type ParsedCommand =
       filter?: ParsedExpr;
       missing: boolean;
     }
-  | { kind: "codebook"; variables: VarRef[] }
+  | { kind: "codebook"; variables: VarRef[]; filter?: ParsedExpr }
   | { kind: "describe"; variables: VarRef[] }
   | { kind: "ds"; variables: VarRef[] }
   | { kind: "list"; variables: VarRef[]; filter?: ParsedExpr }
@@ -97,7 +97,7 @@ export type StataCommand =
   | { kind: "browse"; variables: string[]; filter?: Expr }
   | { kind: "summarize"; variables: string[]; filter?: Expr; detail: boolean }
   | { kind: "tabulate"; variable: string; filter?: Expr; missing: boolean }
-  | { kind: "codebook"; variables: string[] }
+  | { kind: "codebook"; variables: string[]; filter?: Expr }
   | { kind: "describe"; variables: string[] }
   | { kind: "ds"; variables: string[] }
   | { kind: "list"; variables: string[]; filter?: Expr }

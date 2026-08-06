@@ -242,6 +242,14 @@ describe("codebook SQL", () => {
     );
   });
 
+  test("if clause filters both the stats scan and top values", () => {
+    const p = plan("codebook a s if a > 1") as CodebookPlan;
+    expect(p.statsSql.endsWith('WHERE ("a" > 1)')).toBe(true);
+    expect(p.variables[1].topValuesSql).toContain(
+      'WHERE ("a" > 1) AND "s" IS NOT NULL'
+    );
+  });
+
   test("date variables are ordered", () => {
     const p = plan("codebook d ts") as CodebookPlan;
     expect(p.variables[0].ordered).toBe(true);

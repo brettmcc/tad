@@ -37,7 +37,7 @@ prefixes shown in brackets are accepted, e.g. `sum` for `summarize`):
 | `browse` | `bro[wse] [varlist] [if expr]` | Show selected columns / one-off row filter in the grid. |
 | `summarize` | `sum[marize] [varlist] [if expr] [, detail]` | N, mean, sd, min, max. Dates get date-aware statistics. `detail` adds Stata-exact percentiles, extremes, variance, skewness, kurtosis. |
 | `tabulate` | `tab[ulate] var [if expr] [, missing]` | One-way frequencies with percent and cumulative percent. |
-| `codebook` | `codebook [varlist]` | Type, N, missing, distinct, min/max or top values. |
+| `codebook` | `codebook [varlist] [if expr]` | Type, N, missing, distinct, min/max or top values. |
 | `describe` | `des[cribe] [varlist]` | Observation count, variable names and types. |
 | `ds` | `ds [varlist]` | List variable names. |
 | `list` | `list [varlist] [if expr]` | Show the first 200 matching rows. |

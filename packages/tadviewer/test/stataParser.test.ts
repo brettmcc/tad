@@ -151,9 +151,16 @@ describe("varlists", () => {
     );
   });
 
-  test("codebook rejects if clause", () => {
-    expect(() => parseCommand("codebook a if a > 1")).toThrow(
-      "codebook does not support an if clause"
+  test("codebook accepts an if clause", () => {
+    const cmd = parseCommand("codebook a if a > 1");
+    expect(cmd.kind).toBe("codebook");
+    expect((cmd as any).variables).toEqual([v("a", 9, false)]);
+    expect((cmd as any).filter).toBeDefined();
+  });
+
+  test("describe still rejects if clause", () => {
+    expect(() => parseCommand("describe a if a > 1")).toThrow(
+      "describe does not support an if clause"
     );
   });
 });

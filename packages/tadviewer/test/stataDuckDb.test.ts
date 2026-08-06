@@ -349,6 +349,29 @@ describe("codebook", () => {
     ]);
   });
 
+  test("codebook honors an if clause", async () => {
+    const outcome = await executeCommand("codebook a s if a > 2", ctx);
+    expect(outcome.status).toBe("ok");
+    if (outcome.status !== "ok") return;
+
+    const aBlock = outcome.blocks[0];
+    if (aBlock.kind !== "codebookVar") return;
+    expect(aBlock).toMatchObject({
+      variable: "a",
+      n: 3,
+      distinct: 3,
+      min: "3",
+      max: "6",
+    });
+
+    const sBlock = outcome.blocks[1];
+    if (sBlock.kind !== "codebookVar") return;
+    // top values are computed over the filtered rows too
+    expect(
+      sBlock.topValues!.reduce((acc, tv) => acc + tv.freq, 0)
+    ).toBe(sBlock.n);
+  });
+
   test("codebook date column reports min/max", async () => {
     const outcome = await executeCommand("codebook d", ctx);
     expect(outcome.status).toBe("ok");
