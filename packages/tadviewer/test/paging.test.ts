@@ -29,6 +29,30 @@ describe("fetchParams", () => {
   });
 });
 
+describe("initialFetchParams", () => {
+  const { INITIAL_FETCH_MARGIN } = paging;
+
+  test("covers the viewport plus a margin, clamped at row 0", () => {
+    const [offset, limit] = paging.initialFetchParams(0, 50);
+    expect(offset).toBe(0);
+    expect(limit).toBe(50 + INITIAL_FETCH_MARGIN + 1);
+  });
+
+  test("is much smaller than the full prefetch window", () => {
+    const [, initialLimit] = paging.initialFetchParams(0, 50);
+    const [, fullLimit] = paging.fetchParams(0, 50);
+    expect(initialLimit).toBeLessThan(fullLimit / 2);
+  });
+
+  test("brackets a viewport deep in the table", () => {
+    const top = 5 * PAGESIZE + 100;
+    const bottom = top + 50;
+    const [offset, limit] = paging.initialFetchParams(top, bottom);
+    expect(offset).toBe(top - INITIAL_FETCH_MARGIN);
+    expect(offset + limit - 1).toBe(bottom + INITIAL_FETCH_MARGIN);
+  });
+});
+
 describe("prefetch trigger", () => {
   // mirrors the check in PivotRequester.onStateChange: a new fetch fires
   // when the desired (margin-inclusive) range escapes the fetched range
@@ -61,5 +85,15 @@ describe("prefetch trigger", () => {
     // viewport now inside page 6 — the trailing margin page
     const top = 6 * PAGESIZE + 10;
     expect(needsFetch(fetchedOffset, fetchedLimit, top, top + 50)).toBe(true);
+  });
+
+  test("the small initial fetch is followed by the full prefetch window", () => {
+    // what a freshly opened view fetches for its first paint...
+    const [initialOffset, initialLimit] = paging.initialFetchParams(0, 50);
+    // ...leaves the prefetch window outstanding, so a fetch fires immediately
+    expect(needsFetch(initialOffset, initialLimit, 0, 50)).toBe(true);
+    // and once it lands, nothing further is requested
+    const [fullOffset, fullLimit] = paging.fetchParams(0, 50);
+    expect(needsFetch(fullOffset, fullLimit, 0, 50)).toBe(false);
   });
 });

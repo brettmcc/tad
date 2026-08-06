@@ -306,10 +306,18 @@ export class PivotRequester {
     const appState: AppState = mutableGet(stateRef);
     const viewState = appState.viewState;
     const viewParams = viewState.viewParams;
-    const [offset, limit] = paging.fetchParams(
-      viewState.viewportTop,
-      viewState.viewportBottom
-    );
+    // A view with no data yet (a freshly opened or switched-to dataset) is a
+    // user waiting on an empty grid, so fetch just enough rows to paint the
+    // viewport. The full prefetch window follows right behind: setting the
+    // dataView triggers onStateChange, whose viewport check sees the desired
+    // range isn't loaded and requests it.
+    const [offset, limit] =
+      viewState.dataView == null
+        ? paging.initialFetchParams(
+            viewState.viewportTop,
+            viewState.viewportBottom
+          )
+        : paging.fetchParams(viewState.viewportTop, viewState.viewportBottom);
     this.pendingOffset = offset;
     this.pendingLimit = limit;
     const seq = ++this.dataRequestSeq;

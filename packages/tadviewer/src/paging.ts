@@ -47,6 +47,32 @@ export const fetchParams = (top: number, bottom: number): [number, number] => {
   return [offset, limit];
 };
 /*
+ * Rows fetched above and below the viewport for the *first* page of a newly
+ * opened view. Generous enough to cover the visible rows of a tall window
+ * (and a little scrolling), but far smaller than the full prefetch window.
+ */
+
+export const INITIAL_FETCH_MARGIN = 256;
+/*
+ * calculate offset and limit for the first data request of a new view.
+ *
+ * The full fetchParams window is thousands of rows; serializing and rendering
+ * it is what the user waits on when opening or switching datasets, even though
+ * only the visible rows matter for the first paint. So the first request covers
+ * just the viewport plus a small margin; the regular prefetch window is
+ * requested immediately afterwards (see PivotRequester.onStateChange, which
+ * notices that the desired range isn't loaded yet) and lands in the background.
+ */
+
+export const initialFetchParams = (
+  top: number,
+  bottom: number
+): [number, number] => {
+  const offset = Math.max(0, top - INITIAL_FETCH_MARGIN);
+  const limit = bottom + INITIAL_FETCH_MARGIN - offset + 1;
+  return [offset, limit];
+};
+/*
  * returns true iff the interval [top,bottom] entirely contained in the specified
  * offset and limit
  */
