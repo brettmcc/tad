@@ -443,10 +443,27 @@ export const AppPane: React.FunctionComponent<AppPaneProps> = ({
   // We should probably make pivot sidebar deal better with an empty table, but...
   let pivotSidebar: JSX.Element | null;
 
+  /*
+   * Switching datasets installs a fresh ViewState whose dataView is null until
+   * its first page arrives. Tearing the grid down for that interval and
+   * rebuilding it from scratch afterwards was the dominant cost of a dataset
+   * switch (grid construction + column width measurement), so once a grid has
+   * been shown we keep it mounted, still showing the previous rows, until the
+   * new data lands (the usual loading modal still appears if that takes long
+   * enough). A failed load falls back to the empty-state pane as before.
+   */
+  const gridEverShown = useRef(false);
+  if (viewState === null) {
+    gridEverShown.current = false;
+  } else if (viewState.dataView !== null) {
+    gridEverShown.current = true;
+  }
+
   if (
     appState.initialized &&
     viewState !== null &&
-    viewState.dataView !== null
+    (viewState.dataView !== null ||
+      (gridEverShown.current && !viewState.loadFailed))
   ) {
     pivotSidebar = (
       <PivotSidebar

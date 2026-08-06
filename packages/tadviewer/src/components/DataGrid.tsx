@@ -99,11 +99,48 @@ const measureStringWidth = (s: string): number => 8 + CHAR_WIDTH * s.length;
 const measureHeaderStringWidth = (s: string): number =>
   24 + CHAR_WIDTH * s.length;
 
+/*
+ * Initial column widths are estimated by formatting sample cells, which costs
+ * ~20us per cell. Measuring every fetched row (a full page is thousands of
+ * rows) of every column added over a second to opening or switching datasets,
+ * so we measure a strided sample of the page instead, with a total cell budget
+ * so that very wide tables don't blow up the cost.
+ */
+const COLWIDTH_SAMPLE_MAX_ROWS = 100;
+const COLWIDTH_SAMPLE_CELL_BUDGET = 8000;
+
+/* Row indices to measure for column widths: a strided sample of the page. */
+const colWidthSampleRows = (
+  dataView: PagedDataView,
+  columnCount: number
+): number[] => {
+  const offset = dataView.getOffset();
+  const itemCount = dataView.getItemCount();
+  const budgetRows = Math.floor(
+    COLWIDTH_SAMPLE_CELL_BUDGET / Math.max(1, columnCount)
+  );
+  const sampleCount = Math.max(
+    1,
+    Math.min(itemCount, COLWIDTH_SAMPLE_MAX_ROWS, budgetRows)
+  );
+  const stride = Math.max(1, Math.floor(itemCount / sampleCount));
+  const rowIdxs: number[] = [];
+  for (let i = 0; i < sampleCount; i++) {
+    const idx = offset + i * stride;
+    if (idx >= offset + itemCount) {
+      break;
+    }
+    rowIdxs.push(idx);
+  }
+  return rowIdxs;
+};
+
 // get column width for specific column:
 const getColWidth = (
   getColumnFormatter: (schema: reltab.Schema, cid: string) => CellFormatter,
   dataView: PagedDataView,
-  cnm: string
+  cnm: string,
+  rowIdxs: number[]
 ) => {
   const { schema } = dataView;
   let sf: (val: any) => string;
@@ -114,10 +151,11 @@ const getColWidth = (
     sf = (val: any) => val.toString();
   }
   let colWidth;
-  const offset = dataView.getOffset();
-  const limit = offset + dataView.getItemCount();
-  for (var i = offset; i < limit; i++) {
+  for (const i of rowIdxs) {
     var row = dataView.getItem(i);
+    if (row == null) {
+      continue;
+    }
     var cellVal = row![cnm];
     var cellWidth = MINCOLWIDTH;
     if (cellVal) {
@@ -172,12 +210,17 @@ function getInitialColWidthsMap(
   // let's approximate the column width:
   var colWidths: ColWidthMap = {};
   var nRows = dataView.getLength();
-  if (nRows === 0) {
+  if (nRows === 0 || dataView.getItemCount() === 0) {
     return {};
   }
-  const initRow = dataView.getItem(0);
+  const initRow = dataView.getItem(dataView.getOffset());
+  if (initRow == null) {
+    return {};
+  }
+  const columnCount = Object.keys(initRow).length;
+  const rowIdxs = colWidthSampleRows(dataView, columnCount);
   for (let cnm in initRow) {
-    colWidths[cnm] = getColWidth(getColumnFormatter, dataView, cnm);
+    colWidths[cnm] = getColWidth(getColumnFormatter, dataView, cnm, rowIdxs);
   }
 
   return colWidths;
@@ -576,7 +619,14 @@ interface GridState {
   colWidthsMap: ColWidthMap | null;
   slickColMap: any;
   containerId: string;
+  /** column set the widths in colWidthsMap were measured against; when the
+   * grid is re-used for a different dataset the widths must be re-measured */
+  colWidthsKey: string;
 }
+
+/** cheap identity for "the same set of columns" across dataViews */
+const colWidthsKeyOf = (dataView: PagedDataView): string =>
+  dataView.schema.columns.join("|");
 
 const updateColWidth = (
   gs: GridState,
@@ -584,7 +634,12 @@ const updateColWidth = (
   dataView: PagedDataView,
   colId: string
 ) => {
-  const colWidth = getColWidth(getColumnFormatter, dataView, colId);
+  const colWidth = getColWidth(
+    getColumnFormatter,
+    dataView,
+    colId,
+    colWidthSampleRows(dataView, dataView.schema.columns.length)
+  );
   gs.colWidthsMap![colId] = colWidth;
   gs.slickColMap[colId].width = colWidth;
 };
@@ -635,6 +690,14 @@ const updateGrid = (gs: GridState, props: DataGridProps) => {
     sortKey,
     showRoot,
   } = props;
+
+  // when the grid is re-used for a dataset with different columns (switching
+  // datasets keeps the grid mounted), re-measure column widths
+  const widthsKey = colWidthsKeyOf(dataView!);
+  if (widthsKey !== gs.colWidthsKey) {
+    gs.colWidthsMap = getInitialColWidthsMap(getColumnFormatter, dataView!);
+    gs.colWidthsKey = widthsKey;
+  }
 
   gs.slickColMap = mkSlickColMap(
     dataView!.schema,
@@ -713,7 +776,13 @@ const createGridState = (
     colWidthsMap,
     showRoot ?? false
   );
-  const gs = { grid: null, colWidthsMap, slickColMap, containerId };
+  const gs: GridState = {
+    grid: null,
+    colWidthsMap,
+    slickColMap,
+    containerId,
+    colWidthsKey: colWidthsKeyOf(dataView!),
+  };
 
   const gridCols = getGridCols(
     gs,
@@ -787,8 +856,15 @@ export const DataGrid: React.FunctionComponent<DataGridProps> = (
 
   const prevShowColumnHistograms = useRef(showColumnHistograms);
 
+  // Creating grid state calls setGridState, which schedules another render
+  // whose effect would redo the (expensive) grid update for the same data.
+  // These refs let that second pass bail out.
+  const justCreatedGrid = useRef(false);
+  const renderedDataView = useRef<PagedDataView | null>(null);
+
   React.useLayoutEffect(() => {
     let gs = gridState;
+    let created = false;
     // The extra check here for prevShowColumnHistograms is a workaround
     // for an apparent bug in SlickGrid where it doesn't seem to re-render
     // correctly when we dynamically change the showHeaderRow option on the grid.
@@ -796,16 +872,31 @@ export const DataGrid: React.FunctionComponent<DataGridProps> = (
       gs === null ||
       (prevShowColumnHistograms.current !== showColumnHistograms && histoMap)
     ) {
+      if (dataView == null) {
+        // nothing to build a grid from yet
+        return;
+      }
       // log.debug("RawGridPane: creating grid state");
       gs = createGridState(containerIdRef.current, props);
       gs.grid.resizeCanvas();
       setGridState(gs);
       // log.debug("RawGridPane: done creating grid state");
       prevShowColumnHistograms.current = showColumnHistograms;
+      created = true;
+    } else if (
+      justCreatedGrid.current &&
+      renderedDataView.current === dataView
+    ) {
+      // this run was triggered by the setGridState above; the grid already
+      // reflects this dataView
+      justCreatedGrid.current = false;
+      return;
     }
+    justCreatedGrid.current = created;
     if (dataView != null) {
       // log.debug("RawGridPane: updating grid");
       updateGrid(gs, props);
+      renderedDataView.current = dataView;
     } else {
       // log.debug("RawGridPane: no view change, skipping grid update");
     }
