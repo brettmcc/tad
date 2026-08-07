@@ -78,6 +78,7 @@ jobs:
           TAG: ${{ github.event_name == 'release' && github.event.release.tag_name || inputs.tag }}
         run: |
           shopt -s nullglob
+          V=$(node -p "require('./packages/tad-app/package.json').version")
           cd packages/tad-app/release
           case "${{ matrix.name }}" in
             windows) assets=(*.exe *.exe.blockmap latest.yml) ;;
@@ -89,5 +90,29 @@ jobs:
             ls -la >&2
             exit 1
           fi
+
+          # Version-less copies so that
+          # https://github.com/brettmcc/tads/releases/latest/download/<name>
+          # is a permalink to the current installer (that URL only resolves
+          # when the asset name is identical in every release). Copies, not
+          # renames: electron-updater's latest*.yml refers to the versioned
+          # names, so those must stay attached too.
+          stable() {
+            [ -f "$1" ] || { echo "expected installer missing: $1" >&2; exit 1; }
+            cp "$1" "$2"
+            assets+=("$2")
+          }
+          case "${{ matrix.name }}" in
+            windows)
+              stable "Tads.Setup.$V.exe"    "Tads-Setup-windows-x64.exe" ;;
+            macos)
+              stable "Tads-$V-arm64.dmg"    "Tads-macos-arm64.dmg"
+              stable "Tads-$V.dmg"          "Tads-macos-x64.dmg" ;;
+            linux)
+              stable "tads_${V}_amd64.deb"  "Tads-linux-amd64.deb"
+              stable "tads-$V.x86_64.rpm"   "Tads-linux-x86_64.rpm"
+              stable "tads-$V.tar.bz2"      "Tads-linux-x64.tar.bz2" ;;
+          esac
+
           printf 'uploading: %s\n' "${assets[@]}"
           gh release upload "$TAG" "${assets[@]}" --clobber
