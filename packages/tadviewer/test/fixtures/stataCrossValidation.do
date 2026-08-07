@@ -68,6 +68,20 @@ forvalues i = 1/`=r(r)' {
         %24.17g (frequencies[`i', 1]) _n
 }
 
+correlate a b c
+matrix C = r(C)
+file write results "correlate,,N," %24.17g (r(N)) _n
+file write results "correlate,b_a,rho," %24.17g (C[2, 1]) _n
+file write results "correlate,c_a,rho," %24.17g (C[3, 1]) _n
+file write results "correlate,c_b,rho," %24.17g (C[3, 2]) _n
+
+correlate a c, covariance
+matrix V = r(C)
+file write results "correlate_cov,,N," %24.17g (r(N)) _n
+file write results "correlate_cov,a_a,cov," %24.17g (V[1, 1]) _n
+file write results "correlate_cov,c_a,cov," %24.17g (V[2, 1]) _n
+file write results "correlate_cov,c_c,cov," %24.17g (V[2, 2]) _n
+
 count
 file write results "count,,N," %24.17g (r(N)) _n
 

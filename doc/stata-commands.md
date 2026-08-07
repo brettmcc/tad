@@ -28,6 +28,7 @@ their text in the input for correction.
 | `browse` | `bro[wse] [varlist] [if expr]` | Show selected columns and an optional one-off filter in the main grid. |
 | `summarize` | `sum[marize] [varlist] [if expr] [, detail]` | N, mean, sample standard deviation, min, and max. Date/timestamp variables report mean/min/max as dates and the standard deviation in days. `detail` adds exact percentiles, extremes, variance, skewness, kurtosis, and sum for numeric variables. |
 | `tabulate` | `tab[ulate] var [if expr] [, missing]` | One-way frequencies, percent, and cumulative percent. Nulls are excluded unless `missing` is given. |
+| `correlate` | `cor[relate] [varlist] [if expr] [, covariance]` | Lower triangle of the correlation matrix over the numeric variables, using casewise deletion. `covariance` reports sample covariances (variances on the diagonal) instead. |
 | `codebook` | `codebook [varlist] [if expr]` | Type, N, missing, distinct, and min/max or top values. |
 | `describe` | `des[cribe] [varlist]` | Observation count plus variable names and SQL types. |
 | `ds` | `ds [varlist]` | List resolved variable names without querying DuckDB. |
@@ -40,8 +41,8 @@ their text in the input for correction.
 | `drop` | `drop varlist` or `drop if expr` | Drop visible variables, or accumulate the inverse of a row filter. |
 | `histogram` | `hist[ogram] var [if expr] [, bin(#)]` | Render a frequency histogram for a numeric variable. |
 
-Options may be abbreviated where unambiguous: `sum, d`, `tab x, m`, and
-`hist x, bin(20)` are valid.
+Options may be abbreviated where unambiguous: `sum, d`, `tab x, m`,
+`corr x y, cov`, and `hist x, bin(20)` are valid.
 
 An omitted varlist means all currently visible variables for commands that
 permit it. `tabulate` and `histogram` take exactly one variable.
@@ -121,6 +122,12 @@ ceiling order statistic. Skewness and kurtosis use population central moments,
 while variance and standard deviation use sample definitions. The fixture
 results are cross-validated against Stata 19.
 
+`correlate` follows Stata in deleting missing values casewise: an observation
+enters the matrix only if every listed variable is non-null there, so the
+reported `(obs=N)` applies to every cell. Non-numeric variables in the varlist
+are omitted with a note, and correlations display with four decimals.
+Covariances are the sample (N−1) definition.
+
 `tabulate` returns at most 1,000 groups, with percentages computed before the
 limit and displayed with two decimals. Numeric values keep their numeric
 display formatting (grouping only from 10,000 up, so years read cleanly).
@@ -135,6 +142,8 @@ bro make price mpg if mpg > 20
 sum price weight if foreign == 1
 sum price*, detail
 tab rep78, missing
+correlate price weight mpg if foreign == 0
+corr price mpg, covariance
 describe make price*
 list make price if price >= 5000
 count if price != .
