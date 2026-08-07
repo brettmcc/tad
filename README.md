@@ -39,6 +39,7 @@ prefixes shown in brackets are accepted, e.g. `sum` for `summarize`):
 | `tabulate` | `tab[ulate] var [if expr] [, missing]` | One-way frequencies with percent and cumulative percent. |
 | `correlate` | `cor[relate] [varlist] [if expr] [, covariance]` | Correlation matrix (lower triangle) with casewise deletion; `covariance` gives sample covariances. |
 | `codebook` | `codebook [varlist] [if expr]` | Type, N, missing, distinct, min/max or top values. |
+| `distinct` | `distinct [varlist] [if expr] [, missing joint]` | Observations and distinct values per variable, or per value combination with `joint`. |
 | `describe` | `des[cribe] [varlist]` | Observation count, variable names and types. |
 | `ds` | `ds [varlist]` | List variable names. |
 | `list` | `list [varlist] [if expr]` | Show the first 200 matching rows. |

@@ -30,6 +30,7 @@ their text in the input for correction.
 | `tabulate` | `tab[ulate] var [if expr] [, missing]` | One-way frequencies, percent, and cumulative percent. Nulls are excluded unless `missing` is given. |
 | `correlate` | `cor[relate] [varlist] [if expr] [, covariance]` | Lower triangle of the correlation matrix over the numeric variables, using casewise deletion. `covariance` reports sample covariances (variances on the diagonal) instead. |
 | `codebook` | `codebook [varlist] [if expr]` | Type, N, missing, distinct, and min/max or top values. |
+| `distinct` | `distinct [varlist] [if expr] [, missing joint]` | Observations and distinct values per variable. Missing is excluded from both counts unless `missing` is given, which counts it as one distinct value. `joint` counts distinct combinations of the whole varlist instead. |
 | `describe` | `des[cribe] [varlist]` | Observation count plus variable names and SQL types. |
 | `ds` | `ds [varlist]` | List resolved variable names without querying DuckDB. |
 | `list` | `list [varlist] [if expr]` | Display the first 200 matching rows. |
@@ -42,7 +43,8 @@ their text in the input for correction.
 | `histogram` | `hist[ogram] var [if expr] [, bin(#)]` | Render a frequency histogram for a numeric variable. |
 
 Options may be abbreviated where unambiguous: `sum, d`, `tab x, m`,
-`corr x y, cov`, and `hist x, bin(20)` are valid.
+`corr x y, cov`, `distinct x, j`, and `hist x, bin(20)` are valid.
+`codebook` and `distinct` must be spelled in full.
 
 An omitted varlist means all currently visible variables for commands that
 permit it. `tabulate` and `histogram` take exactly one variable.
@@ -129,6 +131,14 @@ are omitted with a note, and correlations display with four decimals.
 Covariances are the sample (N−1) definition. Both forms are cross-validated
 against Stata 19.
 
+`distinct` follows Stata's `distinct` (Nicholas J. Cox): the reported total is
+the number of non-missing observations and the distinct count excludes missing,
+unless `missing` is given, in which case the total is every observation and
+missing counts as one distinct value. `joint` treats the varlist as one unit and
+deletes casewise, so an observation contributes only when every listed variable
+is non-missing there (again unless `missing` is given). Both forms are
+cross-validated against Stata 19.
+
 `tabulate` returns at most 1,000 groups, with percentages computed before the
 limit and displayed with two decimals. Numeric values keep their numeric
 display formatting (grouping only from 10,000 up, so years read cleanly).
@@ -145,6 +155,8 @@ sum price*, detail
 tab rep78, missing
 correlate price weight mpg if foreign == 0
 corr price mpg, covariance
+distinct make rep78
+distinct make model, joint
 describe make price*
 list make price if price >= 5000
 count if price != .
