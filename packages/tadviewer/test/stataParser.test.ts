@@ -94,6 +94,7 @@ describe("command recognition and abbreviations", () => {
     ["tabu a", "tabulate"],
     ["tabulate a", "tabulate"],
     ["codebook a", "codebook"],
+    ["distinct a", "distinct"],
     ["cor a b", "correlate"],
     ["corr a b", "correlate"],
     ["correlate a b", "correlate"],
@@ -102,7 +103,7 @@ describe("command recognition and abbreviations", () => {
     expect(parseCommand(input).kind).toBe(kind);
   });
 
-  const bad: string[] = ["b a", "br a", "su a", "ta a", "code a", "lis a", "summarizes a", "browsee a", "d a", "dro a", "kee a", "gsor a", "co a", "correlates a"];
+  const bad: string[] = ["b a", "br a", "su a", "ta a", "code a", "lis a", "summarizes a", "browsee a", "d a", "dro a", "kee a", "gsor a", "co a", "correlates a", "dist a", "distinc a", "distincts a"];
   test.each(bad)("unknown command: '%s'", (input) => {
     expect(() => parseCommand(input)).toThrow(/unknown command|empty command/);
   });
@@ -159,6 +160,27 @@ describe("varlists", () => {
     expect(cmd.kind).toBe("codebook");
     expect((cmd as any).variables).toEqual([v("a", 9, false)]);
     expect((cmd as any).filter).toBeDefined();
+  });
+
+  test("distinct takes a varlist, an if clause, and missing/joint", () => {
+    expect(parseCommand("distinct")).toEqual({
+      kind: "distinct",
+      variables: [],
+      missing: false,
+      joint: false,
+    });
+    const cmd = parseCommand("distinct a b if c > 2, m j");
+    expect(cmd.kind).toBe("distinct");
+    expect((cmd as any).variables).toEqual([v("a", 9), v("b", 11)]);
+    expect((cmd as any).filter).toBeDefined();
+    expect((cmd as any).missing).toBe(true);
+    expect((cmd as any).joint).toBe(true);
+    expect(() => parseCommand("distinct a, detail")).toThrow(
+      "option 'detail' not recognized"
+    );
+    expect(() => parseCommand("distinct a, joint(2)")).toThrow(
+      "option 'joint' does not take an argument"
+    );
   });
 
   test("correlate takes a varlist, an if clause, and covariance", () => {

@@ -74,6 +74,36 @@
       "c_c": 2.2000000000000002
     }
   },
+  "distinct": {
+    "command": "distinct a b c",
+    "rows": [
+      { "variable": "a", "total": 5, "ndistinct": 5 },
+      { "variable": "b", "total": 5, "ndistinct": 5 },
+      { "variable": "c", "total": 6, "ndistinct": 4 }
+    ]
+  },
+  "distinctMissing": {
+    "command": "distinct a b c, missing",
+    "rows": [
+      { "variable": "a", "total": 6, "ndistinct": 6 },
+      { "variable": "b", "total": 6, "ndistinct": 6 },
+      { "variable": "c", "total": 6, "ndistinct": 4 }
+    ]
+  },
+  "distinctIf": {
+    "command": "distinct a if c > 2",
+    "rows": [{ "variable": "a", "total": 3, "ndistinct": 3 }]
+  },
+  "distinctJoint": {
+    "command": "distinct a c, joint",
+    "total": 5,
+    "ndistinct": 5
+  },
+  "distinctJointMissing": {
+    "command": "distinct a c, joint missing",
+    "total": 6,
+    "ndistinct": 6
+  },
   "count": {
     "all": 6,
     "cGreaterThan2": 4

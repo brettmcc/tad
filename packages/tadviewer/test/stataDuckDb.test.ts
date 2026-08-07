@@ -483,6 +483,100 @@ describe("codebook", () => {
   });
 });
 
+describe("distinct", () => {
+  const tableRows = (outcome: Awaited<ReturnType<typeof executeCommand>>) => {
+    if (outcome.status !== "ok") throw new Error("command failed");
+    const block = outcome.blocks[0];
+    if (block.kind !== "table") throw new Error("expected a table block");
+    return block;
+  };
+
+  test("distinct a s d: total and distinct per variable", async () => {
+    const outcome = await executeCommand("distinct a s d", ctx);
+    expect(outcome.status).toBe("ok");
+    const block = tableRows(outcome);
+    expect(block.columns).toEqual(["Variable", "Total", "Distinct"]);
+    // a: 5 non-null, 5 distinct; s: 5 non-null, 4 distinct ('alpha' twice);
+    // d: 5 non-null dates, all different
+    expect(block.rows).toEqual([
+      ["a", 5, 5],
+      ["s", 5, 4],
+      ["d", 5, 5],
+    ]);
+    if (outcome.status !== "ok") return;
+    expect(outcome.blocks[1]).toEqual({
+      kind: "text",
+      text: "missing values excluded",
+    });
+    // one scan for every variable
+    expect(outcome.sql.match(/FROM \(/g)!.length).toBe(1);
+  });
+
+  test("missing counts nulls in the total and as one distinct value", async () => {
+    const outcome = await executeCommand("distinct a s c, missing", ctx);
+    expect(outcome.status).toBe("ok");
+    expect(tableRows(outcome).rows).toEqual([
+      ["a", 6, 6],
+      ["s", 6, 5],
+      // c has no nulls, so missing changes nothing
+      ["c", 6, 4],
+    ]);
+    if (outcome.status !== "ok") return;
+    expect(outcome.blocks[1]).toEqual({
+      kind: "text",
+      text: "missing counted as a distinct value",
+    });
+  });
+
+  test("if clause and session filter both apply", async () => {
+    const filtered = await executeCommand("distinct a if c > 2", ctx);
+    expect(tableRows(filtered).rows).toEqual([["a", 3, 3]]);
+
+    ctx.sessionFilter = {
+      kind: "cmp",
+      op: ">",
+      lhs: { kind: "var", name: "c" },
+      rhs: { kind: "number", value: 2 },
+    } as Expr;
+    const session = await executeCommand("distinct a", ctx);
+    expect(tableRows(session).rows).toEqual([["a", 3, 3]]);
+  });
+
+  test("joint counts distinct value combinations", async () => {
+    const outcome = await executeCommand("distinct s `select`, joint", ctx);
+    expect(outcome.status).toBe("ok");
+    const block = tableRows(outcome);
+    expect(block.columns).toEqual(["Variables", "Total", "Distinct"]);
+    // rows with both non-null: (alpha,x) (it's,x) (say "hi",y) (gamma,y)
+    // (alpha,z) -- 5 obs, 5 combinations
+    expect(block.rows).toEqual([["s select", 5, 5]]);
+  });
+
+  test("joint with missing keeps null combinations", async () => {
+    const outcome = await executeCommand(
+      "distinct s `select`, joint missing",
+      ctx
+    );
+    // the null-s row (NULL,'y') adds a sixth observation and combination
+    expect(tableRows(outcome).rows).toEqual([["s select", 6, 6]]);
+  });
+
+  test("an empty varlist covers every visible variable", async () => {
+    const outcome = await executeCommand("distinct", ctx);
+    expect(outcome.status).toBe("ok");
+    expect(tableRows(outcome).rows.map((r) => r[0])).toEqual(
+      fullSchema.columns
+    );
+  });
+
+  test("distinct over an empty filter result reports zeros", async () => {
+    const outcome = await executeCommand("distinct a if a > 100", ctx);
+    expect(tableRows(outcome).rows).toEqual([["a", 0, 0]]);
+    const joint = await executeCommand("distinct a c if a > 100, joint", ctx);
+    expect(tableRows(joint).rows).toEqual([["a c", 0, 0]]);
+  });
+});
+
 describe("browse", () => {
   test("bro a b if c > 2 applies projection and filter to the grid", async () => {
     const outcome = await executeCommand("bro a b if c > 2", ctx);
@@ -777,7 +871,7 @@ describe("histogram", () => {
 });
 
 describe("Stata 19 cross-validation", () => {
-  test("matches Stata summarize, detail, tabulate, correlate, and count results", async () => {
+  test("matches Stata summarize, detail, tabulate, correlate, distinct, and count results", async () => {
     const sum = await executeCommand("sum a", ctx);
     expect(sum.status).toBe("ok");
     if (sum.status !== "ok" || sum.blocks[0].kind !== "table") return;
@@ -875,6 +969,33 @@ describe("Stata 19 cross-validation", () => {
     expect(covRows[0][1]).toBeCloseTo(covRef.cov.a_a, 12);
     expect(covRows[1][1]).toBeCloseTo(covRef.cov.c_a, 12);
     expect(covRows[1][2]).toBeCloseTo(covRef.cov.c_c, 12);
+
+    // distinct: Stata reports r(N)/r(ndistinct) per variable
+    for (const ref of [
+      stataReference.distinct,
+      stataReference.distinctMissing,
+      stataReference.distinctIf,
+    ]) {
+      const outcome = await executeCommand(ref.command, ctx);
+      expect(outcome.status).toBe("ok");
+      if (outcome.status !== "ok" || outcome.blocks[0].kind !== "table") {
+        return;
+      }
+      expect(outcome.blocks[0].rows).toEqual(
+        ref.rows.map((r) => [r.variable, r.total, r.ndistinct])
+      );
+    }
+    for (const ref of [
+      stataReference.distinctJoint,
+      stataReference.distinctJointMissing,
+    ]) {
+      const outcome = await executeCommand(ref.command, ctx);
+      expect(outcome.status).toBe("ok");
+      if (outcome.status !== "ok" || outcome.blocks[0].kind !== "table") {
+        return;
+      }
+      expect(outcome.blocks[0].rows).toEqual([["a c", ref.total, ref.ndistinct]]);
+    }
 
     const countAll = await executeCommand("count", ctx);
     expect(countAll.status).toBe("ok");

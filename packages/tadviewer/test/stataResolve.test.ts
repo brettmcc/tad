@@ -42,6 +42,24 @@ describe("variable resolution", () => {
       kind: "codebook",
       variables: COLUMNS,
     });
+    expect(resolve("distinct")).toEqual({
+      kind: "distinct",
+      variables: COLUMNS,
+      missing: false,
+      joint: false,
+    });
+  });
+
+  test("distinct resolves its varlist, options and if clause", () => {
+    expect(resolve("distinct se ha, missing joint")).toEqual({
+      kind: "distinct",
+      variables: ["select", "has space"],
+      missing: true,
+      joint: true,
+    });
+    const cmd = resolve("distinct a if c > 2") as any;
+    expect(cmd.variables).toEqual(["a"]);
+    expect(cmd.filter).toBeDefined();
   });
 
   test("unique prefix abbreviation", () => {

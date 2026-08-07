@@ -19,6 +19,7 @@ import {
   SummarizePlan,
   CodebookPlan,
   CorrelatePlan,
+  DistinctPlan,
   BrowsePlan,
 } from "../src/stataCommand/sql";
 
@@ -310,6 +311,66 @@ describe("codebook SQL", () => {
     const p = plan("codebook d ts") as CodebookPlan;
     expect(p.variables[0].ordered).toBe(true);
     expect(p.variables[1].ordered).toBe(true);
+  });
+});
+
+describe("distinct SQL", () => {
+  test("per-variable totals and distinct counts in one scan", () => {
+    const p = plan("distinct a s") as DistinctPlan;
+    expect(p.joint).toBe(false);
+    expect(p.missing).toBe(false);
+    expect(p.variables).toEqual(["a", "s"]);
+    expect(p.sql).toBe(
+      [
+        'SELECT count("a") AS total_0,',
+        '       count(DISTINCT "a") AS distinct_0,',
+        '       count("s") AS total_1,',
+        '       count(DISTINCT "s") AS distinct_1',
+        BASE_FROM,
+      ].join("\n")
+    );
+    expect(p.sql.match(/FROM \(/g)!.length).toBe(1);
+  });
+
+  test("missing counts every observation and missing as a value", () => {
+    const p = plan("distinct a if c > 2, missing") as DistinctPlan;
+    expect(p.missing).toBe(true);
+    expect(p.sql).toBe(
+      [
+        "SELECT count(*) AS total_0,",
+        '       count(DISTINCT "a") + CASE WHEN count(*) > count("a") THEN 1 ELSE 0 END AS distinct_0',
+        BASE_FROM,
+        'WHERE ("c" > 2)',
+      ].join("\n")
+    );
+  });
+
+  test("joint counts value combinations with casewise deletion", () => {
+    const p = plan("distinct a c, joint") as DistinctPlan;
+    expect(p.joint).toBe(true);
+    expect(p.sql).toBe(
+      [
+        "SELECT CAST(coalesce(sum(freq), 0) AS BIGINT) AS total,",
+        "       count(*) AS n_distinct",
+        "FROM (",
+        "  SELECT count(*) AS freq",
+        ...BASE_FROM.split("\n").map((line) => "  " + line),
+        '  WHERE "a" IS NOT NULL AND "c" IS NOT NULL',
+        '  GROUP BY "a", "c"',
+        ")",
+      ].join("\n")
+    );
+  });
+
+  test("joint with missing keeps every observation", () => {
+    const p = plan("distinct a c, joint missing") as DistinctPlan;
+    expect(p.sql).not.toContain("IS NOT NULL");
+    expect(p.sql).toContain('GROUP BY "a", "c"');
+  });
+
+  test("identifiers needing quoting are escaped", () => {
+    const p = plan("distinct `quote\"name`") as DistinctPlan;
+    expect(p.sql).toContain('count("quote""name") AS total_0');
   });
 });
 

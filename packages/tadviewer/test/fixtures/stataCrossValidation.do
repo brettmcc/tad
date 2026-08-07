@@ -82,6 +82,30 @@ file write results "correlate_cov,a_a,cov," %24.17g (V[1, 1]) _n
 file write results "correlate_cov,c_a,cov," %24.17g (V[2, 1]) _n
 file write results "correlate_cov,c_c,cov," %24.17g (V[2, 2]) _n
 
+* distinct is Nicholas J. Cox's SSC command (ssc install distinct); it
+* reports r() only for the last variable, so run it once per variable.
+foreach var in a b c {
+    distinct `var'
+    file write results "distinct,`var',total," %24.17g (r(N)) _n
+    file write results "distinct,`var',ndistinct," %24.17g (r(ndistinct)) _n
+
+    distinct `var', missing
+    file write results "distinct_missing,`var',total," %24.17g (r(N)) _n
+    file write results "distinct_missing,`var',ndistinct," %24.17g (r(ndistinct)) _n
+}
+
+distinct a if c > 2
+file write results "distinct_if,a,total," %24.17g (r(N)) _n
+file write results "distinct_if,a,ndistinct," %24.17g (r(ndistinct)) _n
+
+distinct a c, joint
+file write results "distinct_joint,a_c,total," %24.17g (r(N)) _n
+file write results "distinct_joint,a_c,ndistinct," %24.17g (r(ndistinct)) _n
+
+distinct a c, joint missing
+file write results "distinct_joint_missing,a_c,total," %24.17g (r(N)) _n
+file write results "distinct_joint_missing,a_c,ndistinct," %24.17g (r(ndistinct)) _n
+
 count
 file write results "count,,N," %24.17g (r(N)) _n
 
