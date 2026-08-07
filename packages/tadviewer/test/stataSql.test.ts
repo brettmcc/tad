@@ -18,6 +18,7 @@ import {
   TabulatePlan,
   SummarizePlan,
   CodebookPlan,
+  CorrelatePlan,
   BrowsePlan,
 } from "../src/stataCommand/sql";
 
@@ -196,6 +197,61 @@ describe("tabulate SQL", () => {
     const p = plan("tab a") as TabulatePlan;
     expect(p.numericValue).toBe(true);
     expect(p.sql).toContain(`SELECT "a" AS value,`);
+  });
+});
+
+describe("correlate SQL", () => {
+  test("lower triangle in one scan with casewise deletion", () => {
+    const p = plan("corr a b c if c > 1") as CorrelatePlan;
+    expect(p.variables).toEqual(["a", "b", "c"]);
+    expect(p.skipped).toEqual([]);
+    expect(p.covariance).toBe(false);
+    expect(p.sql).toBe(
+      [
+        "SELECT count(*) AS n,",
+        '       CAST(corr("b", "a") AS DOUBLE) AS c_1_0,',
+        '       CAST(corr("c", "a") AS DOUBLE) AS c_2_0,',
+        '       CAST(corr("c", "b") AS DOUBLE) AS c_2_1',
+        BASE_FROM,
+        'WHERE ("c" > 1) AND "a" IS NOT NULL AND "b" IS NOT NULL AND "c" IS NOT NULL',
+      ].join("\n")
+    );
+    expect(p.sql.match(/FROM \(/g)!.length).toBe(1);
+  });
+
+  test("covariance option computes variances on the diagonal", () => {
+    const p = plan("corr a b, cov") as CorrelatePlan;
+    expect(p.covariance).toBe(true);
+    expect(p.sql).toBe(
+      [
+        "SELECT count(*) AS n,",
+        '       CAST(var_samp("a") AS DOUBLE) AS c_0_0,',
+        '       CAST(covar_samp("b", "a") AS DOUBLE) AS c_1_0,',
+        '       CAST(var_samp("b") AS DOUBLE) AS c_1_1',
+        BASE_FROM,
+        'WHERE "a" IS NOT NULL AND "b" IS NOT NULL',
+      ].join("\n")
+    );
+  });
+
+  test("a single variable yields only the observation count", () => {
+    const p = plan("corr a") as CorrelatePlan;
+    expect(p.sql).toBe(
+      ["SELECT count(*) AS n", BASE_FROM, 'WHERE "a" IS NOT NULL'].join("\n")
+    );
+  });
+
+  test("non-numeric variables are skipped; quoting is preserved", () => {
+    const p = plan('corr a s `quote"name` `has space`') as CorrelatePlan;
+    expect(p.variables).toEqual(["a", "has space"]);
+    expect(p.skipped).toEqual(["s", 'quote"name']);
+    expect(p.sql).toContain('CAST(corr("has space", "a") AS DOUBLE) AS c_1_0');
+  });
+
+  test("an all-string varlist is an error", () => {
+    expect(() => plan("corr s `select`")).toThrow(
+      "requires at least one numeric variable"
+    );
   });
 });
 

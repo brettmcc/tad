@@ -3,13 +3,15 @@
  *
  * Grammar (deterministic, no backtracking):
  *
- *   command := browseCmd | summarizeCmd | tabulateCmd | codebookCmd
- *            | describeCmd | dsCmd | listCmd | countCmd | orderCmd
- *            | sortCmd | gsortCmd | keepCmd | dropCmd | histogramCmd
+ *   command := browseCmd | summarizeCmd | tabulateCmd | correlateCmd
+ *            | codebookCmd | describeCmd | dsCmd | listCmd | countCmd
+ *            | orderCmd | sortCmd | gsortCmd | keepCmd | dropCmd
+ *            | histogramCmd
  *
  *   browseCmd    := BROWSE varlist? ifClause?
  *   summarizeCmd := SUM varlist? ifClause? options?      -- option: d[etail]
  *   tabulateCmd  := TAB varname ifClause? options?       -- option: m[issing]
+ *   correlateCmd := CORR varlist? ifClause? options?     -- option: cov[ariance]
  *   codebookCmd  := CODEBOOK varlist? ifClause?
  *   describeCmd  := DESCRIBE varlist?
  *   dsCmd        := DS varlist?
@@ -43,6 +45,7 @@
  *   browse:    bro | brow | brows | browse
  *   summarize: sum | summ | ... | summarize
  *   tabulate:  tab | tabu | ... | tabulate
+ *   correlate: cor | corr | ... | correlate
  *   codebook:  codebook
  *   describe:  des | desc | ... | describe
  *   ds:        ds
@@ -96,6 +99,7 @@ const COMMAND_FORMS: Array<{
   { kind: "browse", full: "browse", minPrefix: 3 },
   { kind: "summarize", full: "summarize", minPrefix: 3 },
   { kind: "tabulate", full: "tabulate", minPrefix: 3 },
+  { kind: "correlate", full: "correlate", minPrefix: 3 },
   { kind: "codebook", full: "codebook", minPrefix: 8 },
   { kind: "describe", full: "describe", minPrefix: 3 },
   { kind: "ds", full: "ds", minPrefix: 2 },
@@ -204,7 +208,7 @@ class Parser {
     const kind = matchCommandName(first.text);
     if (kind === null) {
       this.error(
-        `unknown command '${first.text}': expected one of bro[wse], sum[marize], tab[ulate], codebook, des[cribe], ds, list, cou[nt], ord[er], so[rt], gsort, keep, drop, hist[ogram]`,
+        `unknown command '${first.text}': expected one of bro[wse], sum[marize], tab[ulate], cor[relate], codebook, des[cribe], ds, list, cou[nt], ord[er], so[rt], gsort, keep, drop, hist[ogram]`,
         first.pos
       );
     }
@@ -243,6 +247,18 @@ class Parser {
         return filter === undefined
           ? { kind, variable, missing }
           : { kind, variable, filter, missing };
+      }
+      case "correlate": {
+        const variables = this.parseVarlist();
+        const filter = this.parseOptionalIf();
+        const opts = this.parseOptions({
+          covariance: { minPrefix: 3, hasArg: false },
+        });
+        this.expectEof();
+        const covariance = opts.has("covariance");
+        return filter === undefined
+          ? { kind, variables, covariance }
+          : { kind, variables, filter, covariance };
       }
       case "codebook": {
         const variables = this.parseVarlist();

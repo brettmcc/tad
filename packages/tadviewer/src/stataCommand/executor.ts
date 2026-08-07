@@ -22,6 +22,7 @@ import { parseCommand } from "./parser";
 import { resolveCommand } from "./resolve";
 import {
   CodebookPlan,
+  CorrelatePlan,
   CountPlan,
   defaultHistogramBins,
   DescribePlan,
@@ -335,6 +336,55 @@ async function runTabulate(
   return blocks;
 }
 
+/**
+ * Correlate renders the lower triangle of the matrix as a table whose
+ * first column holds the row variable. Correlations display with Stata's
+ * four decimals; covariances keep generic numeric formatting.
+ */
+async function runCorrelate(
+  plan: CorrelatePlan,
+  ctx: CommandExecutionContext
+): Promise<ResultBlock[]> {
+  const res = await ctx.runReadOnlySql(plan.sql);
+  const wide: Row = res.rows[0] ?? {};
+  const n = asNumber(wide.n) ?? 0;
+  const blocks: ResultBlock[] = [];
+  if (plan.skipped.length > 0) {
+    blocks.push({
+      kind: "text",
+      text: `note: omitted non-numeric variable(s): ${plan.skipped.join(", ")}`,
+    });
+  }
+  blocks.push({ kind: "text", text: `(obs=${n})` });
+  if (n === 0) {
+    return blocks;
+  }
+  const cell = (i: number, j: number): CellValue => {
+    if (i === j && !plan.covariance) {
+      return "1.0000";
+    }
+    const v = asNumber(wide[`c_${i}_${j}`]);
+    if (v === null) {
+      return null;
+    }
+    return plan.covariance ? v : v.toFixed(4);
+  };
+  const rows = plan.variables.map((variable, i): CellValue[] => {
+    const cells: CellValue[] = [variable];
+    for (let j = 0; j < plan.variables.length; j++) {
+      cells.push(j <= i ? cell(i, j) : null);
+    }
+    return cells;
+  });
+  blocks.push({
+    kind: "table",
+    columns: ["", ...plan.variables],
+    align: ["left", ...plan.variables.map((): "left" | "right" => "right")],
+    rows,
+  });
+  return blocks;
+}
+
 async function runCodebook(
   plan: CodebookPlan,
   ctx: CommandExecutionContext
@@ -551,6 +601,8 @@ export async function executeCommand(
       }
       case "tabulate":
         return ok("tabulate", input, plan.sql, await runTabulate(plan, ctx));
+      case "correlate":
+        return ok("correlate", input, plan.sql, await runCorrelate(plan, ctx));
       case "codebook": {
         const blocks = await runCodebook(plan, ctx);
         const sql = [

@@ -31,6 +31,11 @@
  *   value, sorted ascending, capped at TAB_GROUP_LIMIT values. NULL is
  *   excluded unless the `missing` option is given (then it sorts last
  *   and displays as ".").
+ * - correlate: the lower triangle of the Pearson correlation matrix (or,
+ *   with the covariance option, the sample covariance matrix) over the
+ *   numeric variables, computed in one scan. Like Stata, missing values
+ *   are deleted casewise: an observation is used only if every listed
+ *   variable is non-null there, so the whole matrix rests on one sample.
  * - codebook: per variable, SQL type, N, missing, exact distinct, then
  *   min/max (ordered types) or top values (TOP_VALUES_LIMIT, ties by
  *   value) -- all scalar stats in one scan.
@@ -187,6 +192,22 @@ export interface TabulatePlan {
   sql: string;
 }
 
+export interface CorrelatePlan {
+  kind: "correlate";
+  /** numeric variables only, in command order */
+  variables: string[];
+  /** non-numeric variables requested but omitted from the matrix */
+  skipped: string[];
+  /** true when the covariance option was given */
+  covariance: boolean;
+  /**
+   * single query: the casewise observation count plus one column per
+   * lower-triangle cell, named c_<row>_<col> by variable index (the
+   * diagonal is emitted only for covariance; correlations are 1).
+   */
+  sql: string;
+}
+
 export interface CodebookVarPlan {
   variable: string;
   sqlType: string;
@@ -255,6 +276,7 @@ export type CommandPlan =
   | SummarizePlan
   | SumDetailPlan
   | TabulatePlan
+  | CorrelatePlan
   | CodebookPlan
   | CountPlan
   | ListPlan
@@ -755,6 +777,71 @@ function planTabulate(
 }
 
 /**
+ * Correlate compiles to a single wide aggregate row: the casewise
+ * observation count plus the lower triangle of the matrix. Casewise
+ * deletion is expressed as an IS NOT NULL conjunct per variable, so every
+ * cell is computed over the same set of observations (Stata's rule).
+ */
+function planCorrelate(
+  cmd: StataCommand & { kind: "correlate" },
+  ctx: PlanContext
+): CorrelatePlan {
+  const variables = cmd.variables.filter((colId) =>
+    colIsNumeric(columnTypeOf(ctx, colId))
+  );
+  const skipped = cmd.variables.filter(
+    (colId) => !colIsNumeric(columnTypeOf(ctx, colId))
+  );
+  if (variables.length === 0) {
+    throw new StataCommandError(
+      "plan",
+      "correlate requires at least one numeric variable"
+    );
+  }
+  const quoted = variables.map((colId) => ctx.dialect.quoteCol(colId));
+  const from = fromClause(ctx);
+  const where = whereClause(
+    cmd.filter,
+    ctx,
+    quoted.map((q) => `${q} IS NOT NULL`).join(" AND ")
+  );
+  const cols = ["count(*) AS n"];
+  variables.forEach((_, i) => {
+    for (let j = 0; j <= i; j++) {
+      if (i === j) {
+        // the correlation of a variable with itself is 1 by definition;
+        // only the covariance diagonal (the variance) needs computing
+        if (cmd.covariance) {
+          cols.push(`CAST(var_samp(${quoted[i]}) AS DOUBLE) AS c_${i}_${i}`);
+        }
+      } else {
+        const fn = cmd.covariance ? "covar_samp" : "corr";
+        cols.push(
+          `CAST(${fn}(${quoted[i]}, ${quoted[j]}) AS DOUBLE) AS c_${i}_${j}`
+        );
+      }
+    }
+  });
+  const lines = [
+    "SELECT " + cols[0] + (cols.length > 1 ? "," : ""),
+    ...cols
+      .slice(1)
+      .map((s, i) => `       ${s}${i === cols.length - 2 ? "" : ","}`),
+    from,
+  ];
+  if (where !== "") {
+    lines.push(where);
+  }
+  return {
+    kind: "correlate",
+    variables,
+    skipped,
+    covariance: cmd.covariance,
+    sql: lines.join("\n"),
+  };
+}
+
+/**
  * Codebook computes N / missing / distinct / min / max for all requested
  * variables in one scan (stat columns suffixed by variable index); the
  * per-variable top-values queries (categorical variables only) remain
@@ -1095,6 +1182,8 @@ export function planCommand(cmd: StataCommand, ctx: PlanContext): CommandPlan {
       return cmd.detail ? planSumDetail(cmd, ctx) : planSummarize(cmd, ctx);
     case "tabulate":
       return planTabulate(cmd, ctx);
+    case "correlate":
+      return planCorrelate(cmd, ctx);
     case "codebook":
       return planCodebook(cmd, ctx);
     case "count":

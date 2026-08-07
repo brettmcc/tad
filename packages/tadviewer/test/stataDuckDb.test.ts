@@ -311,6 +311,83 @@ describe("missing-value syntax", () => {
   });
 });
 
+describe("correlate", () => {
+  // casewise deletion over a, b, c keeps rows 1, 2, 4, 6:
+  //   a = 1, 2, 4, 6   b = 1.5, 2.5, 4.5, 6.5 (= a + 0.5)   c = 1, 2, 3, 5
+  const corrAC = 11.25 / Math.sqrt(14.75 * 8.75);
+
+  test("lower-triangular correlation matrix with casewise deletion", async () => {
+    const outcome = await executeCommand("corr a b c", ctx);
+    expect(outcome.status).toBe("ok");
+    if (outcome.status !== "ok") return;
+    expect(outcome.blocks[0]).toEqual({ kind: "text", text: "(obs=4)" });
+    const block = outcome.blocks[1];
+    expect(block.kind).toBe("table");
+    if (block.kind !== "table") return;
+    expect(block.columns).toEqual(["", "a", "b", "c"]);
+    // b is an exact affine function of a, so their correlation is 1
+    expect(block.rows).toEqual([
+      ["a", "1.0000", null, null],
+      ["b", "1.0000", "1.0000", null],
+      ["c", corrAC.toFixed(4), corrAC.toFixed(4), "1.0000"],
+    ]);
+  });
+
+  test("covariance option reports variances on the diagonal", async () => {
+    const outcome = await executeCommand("corr a c, cov", ctx);
+    expect(outcome.status).toBe("ok");
+    if (outcome.status !== "ok") return;
+    // dropping b from the varlist keeps row 3 (b is null there): N = 5
+    expect(outcome.blocks[0]).toEqual({ kind: "text", text: "(obs=5)" });
+    const block = outcome.blocks[1];
+    if (block.kind !== "table") return;
+    // a = 1,2,3,4,6; c = 1,2,3,3,5; means 3.2 and 2.8
+    expect(block.rows[0][1]).toBeCloseTo(3.7, 12); // var(a)
+    expect(block.rows[1][1]).toBeCloseTo(2.8, 12); // cov(c, a)
+    expect(block.rows[1][2]).toBeCloseTo(2.2, 12); // var(c)
+    expect(block.rows[0][2]).toBeNull();
+  });
+
+  test("if clauses and the session filter narrow the sample", async () => {
+    const outcome = await executeCommand("corr a b if c > 2", ctx);
+    expect(outcome.status).toBe("ok");
+    if (outcome.status !== "ok") return;
+    // c > 2 with a and b non-null: rows 4 and 6
+    expect(outcome.blocks[0]).toEqual({ kind: "text", text: "(obs=2)" });
+    const block = outcome.blocks[1];
+    if (block.kind !== "table") return;
+    expect(block.rows[1][1]).toBe("1.0000");
+  });
+
+  test("non-numeric variables are noted and omitted", async () => {
+    const outcome = await executeCommand("corr a s", ctx);
+    expect(outcome.status).toBe("ok");
+    if (outcome.status !== "ok") return;
+    expect(outcome.blocks[0]).toEqual({
+      kind: "text",
+      text: "note: omitted non-numeric variable(s): s",
+    });
+    expect(outcome.blocks[1]).toEqual({ kind: "text", text: "(obs=5)" });
+    const block = outcome.blocks[2];
+    if (block.kind !== "table") return;
+    expect(block.rows).toEqual([["a", "1.0000"]]);
+  });
+
+  test("no observations yields the count alone", async () => {
+    const outcome = await executeCommand("corr a b if c > 99", ctx);
+    expect(outcome.status).toBe("ok");
+    if (outcome.status !== "ok") return;
+    expect(outcome.blocks).toEqual([{ kind: "text", text: "(obs=0)" }]);
+  });
+
+  test("correlate on string columns errors", async () => {
+    const outcome = await executeCommand("corr s `select`", ctx);
+    expect(outcome.status).toBe("error");
+    if (outcome.status !== "error") return;
+    expect(outcome.error).toContain("numeric variable");
+  });
+});
+
 describe("codebook", () => {
   test("codebook a s: type, N, missing, distinct, min/max or top values", async () => {
     const outcome = await executeCommand("codebook a s", ctx);

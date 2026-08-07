@@ -202,6 +202,16 @@ export function resolveCommand(
       } as const;
       return filter === undefined ? { ...base } : { ...base, filter };
     }
+    case "correlate": {
+      const variables = resolveVarlist(cmd.variables, columns, true);
+      const filter = maybeFilter(cmd.filter, columns);
+      const base = {
+        kind: "correlate",
+        variables,
+        covariance: cmd.covariance,
+      } as const;
+      return filter === undefined ? { ...base } : { ...base, filter };
+    }
     case "codebook": {
       const variables = resolveVarlist(cmd.variables, columns, true);
       const filter = maybeFilter(cmd.filter, columns);

@@ -94,12 +94,15 @@ describe("command recognition and abbreviations", () => {
     ["tabu a", "tabulate"],
     ["tabulate a", "tabulate"],
     ["codebook a", "codebook"],
+    ["cor a b", "correlate"],
+    ["corr a b", "correlate"],
+    ["correlate a b", "correlate"],
   ];
   test.each(good)("'%s' -> %s", (input, kind) => {
     expect(parseCommand(input).kind).toBe(kind);
   });
 
-  const bad: string[] = ["b a", "br a", "su a", "ta a", "code a", "lis a", "summarizes a", "browsee a", "d a", "dro a", "kee a", "gsor a"];
+  const bad: string[] = ["b a", "br a", "su a", "ta a", "code a", "lis a", "summarizes a", "browsee a", "d a", "dro a", "kee a", "gsor a", "co a", "correlates a"];
   test.each(bad)("unknown command: '%s'", (input) => {
     expect(() => parseCommand(input)).toThrow(/unknown command|empty command/);
   });
@@ -156,6 +159,25 @@ describe("varlists", () => {
     expect(cmd.kind).toBe("codebook");
     expect((cmd as any).variables).toEqual([v("a", 9, false)]);
     expect((cmd as any).filter).toBeDefined();
+  });
+
+  test("correlate takes a varlist, an if clause, and covariance", () => {
+    expect(parseCommand("corr")).toEqual({
+      kind: "correlate",
+      variables: [],
+      covariance: false,
+    });
+    const cmd = parseCommand("corr a b if c > 2, cov");
+    expect(cmd.kind).toBe("correlate");
+    expect((cmd as any).variables).toEqual([v("a", 5), v("b", 7)]);
+    expect((cmd as any).filter).toBeDefined();
+    expect((cmd as any).covariance).toBe(true);
+    expect(() => parseCommand("corr a b, means")).toThrow(
+      "option 'means' not recognized"
+    );
+    expect(() => parseCommand("corr a b, co")).toThrow(
+      "option 'co' not recognized"
+    );
   });
 
   test("describe still rejects if clause", () => {

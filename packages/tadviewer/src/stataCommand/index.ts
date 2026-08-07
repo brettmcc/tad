@@ -10,6 +10,7 @@ export {
   CodebookVarPlan,
   combineFilters,
   CommandPlan,
+  CorrelatePlan,
   CountPlan,
   defaultHistogramBins,
   DescribePlan,
