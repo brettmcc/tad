@@ -126,7 +126,8 @@ results are cross-validated against Stata 19.
 enters the matrix only if every listed variable is non-null there, so the
 reported `(obs=N)` applies to every cell. Non-numeric variables in the varlist
 are omitted with a note, and correlations display with four decimals.
-Covariances are the sample (N−1) definition.
+Covariances are the sample (N−1) definition. Both forms are cross-validated
+against Stata 19.
 
 `tabulate` returns at most 1,000 groups, with percentages computed before the
 limit and displayed with two decimals. Numeric values keep their numeric

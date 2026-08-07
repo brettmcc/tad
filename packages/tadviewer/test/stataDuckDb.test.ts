@@ -777,7 +777,7 @@ describe("histogram", () => {
 });
 
 describe("Stata 19 cross-validation", () => {
-  test("matches Stata summarize, detail, tabulate, and count results", async () => {
+  test("matches Stata summarize, detail, tabulate, correlate, and count results", async () => {
     const sum = await executeCommand("sum a", ctx);
     expect(sum.status).toBe("ok");
     if (sum.status !== "ok" || sum.blocks[0].kind !== "table") return;
@@ -851,6 +851,30 @@ describe("Stata 19 cross-validation", () => {
       expect(row[2]).toBe(expected.percent.toFixed(2));
       expect(row[3]).toBe(expected.cum.toFixed(2));
     });
+
+    const corrRef = stataReference.correlate;
+    const corr = await executeCommand(corrRef.command, ctx);
+    expect(corr.status).toBe("ok");
+    if (corr.status !== "ok") return;
+    expect(corr.blocks[0]).toEqual({ kind: "text", text: `(obs=${corrRef.n})` });
+    if (corr.blocks[1].kind !== "table") return;
+    // Stata prints the lower triangle with four decimals
+    expect(corr.blocks[1].rows).toEqual([
+      ["a", "1.0000", null, null],
+      ["b", corrRef.rho.b_a.toFixed(4), "1.0000", null],
+      ["c", corrRef.rho.c_a.toFixed(4), corrRef.rho.c_b.toFixed(4), "1.0000"],
+    ]);
+
+    const covRef = stataReference.correlateCovariance;
+    const cov = await executeCommand(covRef.command, ctx);
+    expect(cov.status).toBe("ok");
+    if (cov.status !== "ok") return;
+    expect(cov.blocks[0]).toEqual({ kind: "text", text: `(obs=${covRef.n})` });
+    if (cov.blocks[1].kind !== "table") return;
+    const covRows = cov.blocks[1].rows;
+    expect(covRows[0][1]).toBeCloseTo(covRef.cov.a_a, 12);
+    expect(covRows[1][1]).toBeCloseTo(covRef.cov.c_a, 12);
+    expect(covRows[1][2]).toBeCloseTo(covRef.cov.c_c, 12);
 
     const countAll = await executeCommand("count", ctx);
     expect(countAll.status).toBe("ok");

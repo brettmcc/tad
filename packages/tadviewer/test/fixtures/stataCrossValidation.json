@@ -1,7 +1,7 @@
 {
   "provenance": {
     "generatedBy": "Stata/MP 19.0",
-    "generatedOn": "2026-06-13",
+    "generatedOn": "2026-08-07",
     "doFile": "stataCrossValidation.do"
   },
   "summarize": {
@@ -53,6 +53,26 @@
       { "value": "3", "freq": 2, "percent": 33.333333333333336, "cum": 66.66666666666667 },
       { "value": "5", "freq": 2, "percent": 33.333333333333336, "cum": 100 }
     ]
+  },
+  "correlate": {
+    "command": "correlate a b c",
+    "variables": ["a", "b", "c"],
+    "n": 4,
+    "rho": {
+      "b_a": 0.99999999999999978,
+      "c_a": 0.99026740830523841,
+      "c_b": 0.99026740830523841
+    }
+  },
+  "correlateCovariance": {
+    "command": "correlate a c, covariance",
+    "variables": ["a", "c"],
+    "n": 5,
+    "cov": {
+      "a_a": 3.7000000000000002,
+      "c_a": 2.7999999999999998,
+      "c_c": 2.2000000000000002
+    }
   },
   "count": {
     "all": 6,
