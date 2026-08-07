@@ -31,6 +31,7 @@ their text in the input for correction.
 | `correlate` | `cor[relate] [varlist] [if expr] [, covariance]` | Lower triangle of the correlation matrix over the numeric variables, using casewise deletion. `covariance` reports sample covariances (variances on the diagonal) instead. |
 | `codebook` | `codebook [varlist] [if expr]` | Type, N, missing, distinct, and min/max or top values. |
 | `distinct` | `distinct [varlist] [if expr] [, missing joint]` | Observations and distinct values per variable. Missing is excluded from both counts unless `missing` is given, which counts it as one distinct value. `joint` counts distinct combinations of the whole varlist instead. |
+| `duplicates report` | `duplicates r[eport] [varlist] [if expr]` | Distribution of duplicate observations over the varlist: copies, observations, and surplus. |
 | `describe` | `des[cribe] [varlist]` | Observation count plus variable names and SQL types. |
 | `ds` | `ds [varlist]` | List resolved variable names without querying DuckDB. |
 | `list` | `list [varlist] [if expr]` | Display the first 200 matching rows. |
@@ -44,7 +45,10 @@ their text in the input for correction.
 
 Options may be abbreviated where unambiguous: `sum, d`, `tab x, m`,
 `corr x y, cov`, `distinct x, j`, and `hist x, bin(20)` are valid.
-`codebook` and `distinct` must be spelled in full.
+`codebook`, `distinct`, and `duplicates` must be spelled in full, though the
+`duplicates` subcommand may be abbreviated (`duplicates r`). Only the `report`
+subcommand is implemented; Stata's `examples`, `list`, `tag`, and `drop`
+subcommands are rejected with a message.
 
 An omitted varlist means all currently visible variables for commands that
 permit it. `tabulate` and `histogram` take exactly one variable.
@@ -139,6 +143,15 @@ deletes casewise, so an observation contributes only when every listed variable
 is non-missing there (again unless `missing` is given). Both forms are
 cross-validated against Stata 19.
 
+`duplicates report` follows Stata: observations are grouped by the varlist and
+the group sizes are rolled up into one row per distinct size, where
+`Observations` is how many observations have that many copies and `Surplus` is
+how many of them a `duplicates drop` would remove. An omitted varlist means all
+visible variables. Missing is an ordinary value here, so two observations that
+are missing in the same variables are duplicates of each other — unlike
+`distinct`, nothing is deleted casewise. The header echoes the varlist, and a
+trailing line gives the totals. Cross-validated against Stata 19.
+
 `tabulate` returns at most 1,000 groups, with percentages computed before the
 limit and displayed with two decimals. Numeric values keep their numeric
 display formatting (grouping only from 10,000 up, so years read cleanly).
@@ -157,6 +170,8 @@ correlate price weight mpg if foreign == 0
 corr price mpg, covariance
 distinct make rep78
 distinct make model, joint
+duplicates report
+duplicates report make model if year >= 2020
 describe make price*
 list make price if price >= 5000
 count if price != .

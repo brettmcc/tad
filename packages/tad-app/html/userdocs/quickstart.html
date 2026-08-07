@@ -81,6 +81,7 @@
             <tr><td><code>correlate</code></td><td><code>cor[relate] [varlist] [if expr] [, covariance]</code></td><td>Lower triangle of the correlation matrix (casewise deletion); <code>covariance</code> reports sample covariances.</td></tr>
             <tr><td><code>codebook</code></td><td><code>codebook [varlist] [if expr]</code></td><td>Type, N, missing, distinct, and min/max or top values.</td></tr>
             <tr><td><code>distinct</code></td><td><code>distinct [varlist] [if expr] [, missing joint]</code></td><td>Observations and distinct values per variable; <code>joint</code> counts distinct value combinations of the whole varlist.</td></tr>
+            <tr><td><code>duplicates report</code></td><td><code>duplicates r[eport] [varlist] [if expr]</code></td><td>Copies, observations, and surplus for duplicate observations over the varlist; missing counts as an ordinary value.</td></tr>
             <tr><td><code>describe</code></td><td><code>des[cribe] [varlist]</code></td><td>Observation count plus variable names and SQL types.</td></tr>
             <tr><td><code>ds</code></td><td><code>ds [varlist]</code></td><td>List resolved variable names.</td></tr>
             <tr><td><code>list</code></td><td><code>list [varlist] [if expr]</code></td><td>Display the first 200 matching rows.</td></tr>
@@ -96,7 +97,8 @@
         <p>
         Command names may be abbreviated as shown (<code>sum</code>, <code>tab</code>, <code>bro</code>, &hellip;),
         and options may be abbreviated where unambiguous: <code>sum, d</code>, <code>tab x, m</code>, and <code>corr x y, cov</code> are valid
-        (<code>codebook</code> and <code>distinct</code> must be spelled in full).
+        (<code>codebook</code>, <code>distinct</code>, and <code>duplicates</code> must be spelled in full,
+        though the <code>duplicates</code> subcommand may be abbreviated to <code>duplicates r</code>).
         An omitted varlist means all currently visible variables.
         </p>
         <h4>Variables, wildcards, and <code>if</code> expressions</h4>
@@ -138,6 +140,7 @@ sum price weight if foreign == 1
 sum price*, detail
 tab rep78, missing
 distinct make rep78
+duplicates report make model
 count if price != .
 keep if year >= 2020
 drop temporary_*
