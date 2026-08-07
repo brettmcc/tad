@@ -1,0 +1,93 @@
+# Builds the installers for every supported OS and attaches them to the
+# GitHub Release that triggered the workflow. electron-builder can only
+# target the OS it runs on, so each platform gets its own runner.
+#
+#   windows-latest -> NSIS installer (.exe) + blockmap + latest.yml
+#   macos-latest   -> dmg + zip for arm64 and x64 (unsigned, unnotarized)
+#   ubuntu-latest  -> deb + rpm + tar.bz2
+name: release
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing release tag to attach the builds to (e.g. v0.16.0)"
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      # one platform failing shouldn't discard the installers of the others
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            name: windows
+          - os: macos-latest
+            name: macos
+          - os: ubuntu-latest
+            name: linux
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      # electron-builder shells out to rpmbuild for the rpm target
+      - name: Install rpm tooling
+        if: matrix.name == 'linux'
+        run: sudo apt-get update && sudo apt-get install -y rpm
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Build packages
+        run: npm run build
+
+      - name: Build Windows installer
+        if: matrix.name == 'windows'
+        run: npm run dist:win -w packages/tad-app
+
+      - name: Build macOS installers (arm64 + x64)
+        if: matrix.name == 'macos'
+        # invoke the workspace script directly: args after -- don't survive
+        # the root script's nested "npm run -w" indirection
+        run: npm run dist:mac -w packages/tad-app -- --arm64 --x64
+        env:
+          # unsigned build: no signing identity, and tools/notarize.js
+          # skips notarization when APPLEID is not set
+          CSC_IDENTITY_AUTO_DISCOVERY: "false"
+
+      - name: Build Linux installers
+        if: matrix.name == 'linux'
+        run: npm run dist:linux -w packages/tad-app
+
+      - name: Upload artifacts to release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.event_name == 'release' && github.event.release.tag_name || inputs.tag }}
+        run: |
+          shopt -s nullglob
+          cd packages/tad-app/release
+          case "${{ matrix.name }}" in
+            windows) assets=(*.exe *.exe.blockmap latest.yml) ;;
+            macos)   assets=(*.dmg *.dmg.blockmap *-mac.zip *-mac.zip.blockmap latest-mac.yml) ;;
+            linux)   assets=(*.deb *.rpm *.tar.bz2 latest-linux*.yml) ;;
+          esac
+          if [ ${#assets[@]} -eq 0 ]; then
+            echo "no installers found in $(pwd)" >&2
+            ls -la >&2
+            exit 1
+          fi
+          printf 'uploading: %s\n' "${assets[@]}"
+          gh release upload "$TAG" "${assets[@]}" --clobber
