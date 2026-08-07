@@ -20,6 +20,7 @@ import {
   CodebookPlan,
   CorrelatePlan,
   DistinctPlan,
+  DuplicatesPlan,
   BrowsePlan,
 } from "../src/stataCommand/sql";
 
@@ -371,6 +372,48 @@ describe("distinct SQL", () => {
   test("identifiers needing quoting are escaped", () => {
     const p = plan("distinct `quote\"name`") as DistinctPlan;
     expect(p.sql).toContain('count("quote""name") AS total_0');
+  });
+});
+
+describe("duplicates report SQL", () => {
+  test("group sizes rolled up into copies/observations/surplus", () => {
+    const p = plan("duplicates report a s") as DuplicatesPlan;
+    expect(p.variables).toEqual(["a", "s"]);
+    expect(p.allVariables).toBe(false);
+    expect(p.sql).toBe(
+      [
+        "SELECT copies,",
+        "       CAST(copies * count(*) AS BIGINT) AS observations,",
+        "       CAST((copies - 1) * count(*) AS BIGINT) AS surplus,",
+        "       count(*) OVER () AS n_rows",
+        "FROM (",
+        "  SELECT count(*) AS copies",
+        ...BASE_FROM.split("\n").map((line) => "  " + line),
+        '  GROUP BY "a", "s"',
+        ")",
+        "GROUP BY copies",
+        "ORDER BY copies",
+        "LIMIT 1000",
+      ].join("\n")
+    );
+  });
+
+  test("an omitted varlist means every variable", () => {
+    const p = plan("duplicates report") as DuplicatesPlan;
+    expect(p.allVariables).toBe(true);
+    expect(p.sql).toContain(
+      'GROUP BY "a", "b", "c", "s", "has space", "select", "quote""name", "d", "ts"'
+    );
+  });
+
+  test("the if clause filters before grouping", () => {
+    const p = plan("duplicates report a if c > 2") as DuplicatesPlan;
+    expect(p.sql).toContain('  WHERE ("c" > 2)\n  GROUP BY "a"');
+  });
+
+  test("identifiers needing quoting are escaped", () => {
+    const p = plan('duplicates report `quote"name`') as DuplicatesPlan;
+    expect(p.sql).toContain('GROUP BY "quote""name"');
   });
 });
 

@@ -690,6 +690,97 @@ describe("tab , missing", () => {
   });
 });
 
+describe("duplicates report", () => {
+  test("reports copies, observations, and surplus for one variable", async () => {
+    const outcome = await executeCommand("duplicates report c", ctx);
+    expect(outcome.status).toBe("ok");
+    if (outcome.status !== "ok") return;
+    expect(outcome.blocks[0]).toEqual({
+      kind: "text",
+      text: "Duplicates in terms of c",
+    });
+    const block = outcome.blocks[1];
+    expect(block.kind).toBe("table");
+    if (block.kind !== "table") return;
+    expect(block.columns).toEqual(["Copies", "Observations", "Surplus"]);
+    // c = 1, 2, 3, 3, 5, 5: two singletons and two pairs
+    expect(block.rows).toEqual([
+      [1, 2, 0],
+      [2, 4, 2],
+    ]);
+    expect(outcome.blocks[2]).toEqual({
+      kind: "text",
+      text: "Total: 6 observations, 2 surplus",
+    });
+  });
+
+  test("all variables: every fixture row is unique", async () => {
+    const outcome = await executeCommand("duplicates report", ctx);
+    expect(outcome.status).toBe("ok");
+    if (outcome.status !== "ok") return;
+    expect(outcome.blocks[0]).toEqual({
+      kind: "text",
+      text: "Duplicates in terms of all variables",
+    });
+    const block = outcome.blocks[1];
+    if (block.kind !== "table") return;
+    expect(block.rows).toEqual([[1, 6, 0]]);
+  });
+
+  test("missing counts as a value, like Stata", async () => {
+    // `select` is 'x','x','y','y','y','z' and `quote"name` has one null;
+    // grouping on both puts the null row in its own group
+    const outcome = await executeCommand(
+      'duplicates report `select` `quote"name`',
+      ctx
+    );
+    expect(outcome.status).toBe("ok");
+    if (outcome.status !== "ok") return;
+    const block = outcome.blocks[1];
+    if (block.kind !== "table") return;
+    // groups: (x,q1) x2, (y,q2) x2, (y,NULL) x1, (z,q3) x1
+    expect(block.rows).toEqual([
+      [1, 2, 0],
+      [2, 4, 2],
+    ]);
+
+    // two observations that are missing in the same variable are
+    // duplicates of each other: b is null once, so grouping on b alone
+    // leaves six singleton groups
+    const single = await executeCommand("duplicates report b", ctx);
+    if (single.status !== "ok" || single.blocks[1].kind !== "table") return;
+    expect(single.blocks[1].rows).toEqual([[1, 6, 0]]);
+  });
+
+  test("respects the if clause and the session filter", async () => {
+    const filtered = await executeCommand(
+      "duplicates report c if c >= 3",
+      ctx
+    );
+    expect(filtered.status).toBe("ok");
+    if (filtered.status !== "ok" || filtered.blocks[1].kind !== "table") return;
+    // c in {3, 3, 5, 5}: two pairs
+    expect(filtered.blocks[1].rows).toEqual([[2, 4, 2]]);
+
+    const keep = await executeCommand("keep if c > 2", ctx);
+    expect(keep.status).toBe("ok");
+    ctx.sessionFilter = lastGrid!.sessionFilter as Expr;
+    const session = await executeCommand("duplicates report c", ctx);
+    if (session.status !== "ok" || session.blocks[1].kind !== "table") return;
+    expect(session.blocks[1].rows).toEqual([[2, 4, 2]]);
+  });
+
+  test("an empty result reports no observations", async () => {
+    const outcome = await executeCommand("duplicates report a if a > 100", ctx);
+    expect(outcome.status).toBe("ok");
+    if (outcome.status !== "ok") return;
+    expect(outcome.blocks).toEqual([
+      { kind: "text", text: "Duplicates in terms of a" },
+      { kind: "text", text: "no observations" },
+    ]);
+  });
+});
+
 describe("grid commands against the session", () => {
   test("keep if updates session filter; subsequent sum respects it", async () => {
     const keep = await executeCommand("keep if c > 2", ctx);
@@ -871,7 +962,7 @@ describe("histogram", () => {
 });
 
 describe("Stata 19 cross-validation", () => {
-  test("matches Stata summarize, detail, tabulate, correlate, distinct, and count results", async () => {
+  test("matches Stata summarize, detail, tabulate, correlate, distinct, duplicates, and count results", async () => {
     const sum = await executeCommand("sum a", ctx);
     expect(sum.status).toBe("ok");
     if (sum.status !== "ok" || sum.blocks[0].kind !== "table") return;
@@ -995,6 +1086,27 @@ describe("Stata 19 cross-validation", () => {
         return;
       }
       expect(outcome.blocks[0].rows).toEqual([["a c", ref.total, ref.ndistinct]]);
+    }
+
+    // duplicates report: Stata displays the panel rather than returning
+    // it, so the fixture carries the displayed copies/observations/surplus
+    for (const ref of [
+      stataReference.duplicatesReportAll,
+      stataReference.duplicatesReportVar,
+      stataReference.duplicatesReportIf,
+    ]) {
+      const command = "command" in ref ? ref.command : ref.tadsCommand;
+      const outcome = await executeCommand(command, ctx);
+      expect(outcome.status).toBe("ok");
+      if (outcome.status !== "ok" || outcome.blocks[1].kind !== "table") {
+        return;
+      }
+      if ("header" in ref) {
+        expect(outcome.blocks[0]).toEqual({ kind: "text", text: ref.header });
+      }
+      expect(outcome.blocks[1].rows).toEqual(
+        ref.rows.map((r) => [r.copies, r.observations, r.surplus])
+      );
     }
 
     const countAll = await executeCommand("count", ctx);

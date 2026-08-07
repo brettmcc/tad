@@ -50,6 +50,20 @@ describe("variable resolution", () => {
     });
   });
 
+  test("duplicates report resolves its varlist and if clause", () => {
+    expect(resolve("duplicates report")).toEqual({
+      kind: "duplicates",
+      variables: COLUMNS,
+    });
+    expect(resolve("duplicates report se ha")).toEqual({
+      kind: "duplicates",
+      variables: ["select", "has space"],
+    });
+    const cmd = resolve("duplicates report a if c > 2") as any;
+    expect(cmd.variables).toEqual(["a"]);
+    expect(cmd.filter).toBeDefined();
+  });
+
   test("distinct resolves its varlist, options and if clause", () => {
     expect(resolve("distinct se ha, missing joint")).toEqual({
       kind: "distinct",

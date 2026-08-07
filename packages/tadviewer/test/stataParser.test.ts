@@ -95,6 +95,8 @@ describe("command recognition and abbreviations", () => {
     ["tabulate a", "tabulate"],
     ["codebook a", "codebook"],
     ["distinct a", "distinct"],
+    ["duplicates report a", "duplicates"],
+    ["duplicates r a", "duplicates"],
     ["cor a b", "correlate"],
     ["corr a b", "correlate"],
     ["correlate a b", "correlate"],
@@ -103,7 +105,7 @@ describe("command recognition and abbreviations", () => {
     expect(parseCommand(input).kind).toBe(kind);
   });
 
-  const bad: string[] = ["b a", "br a", "su a", "ta a", "code a", "lis a", "summarizes a", "browsee a", "d a", "dro a", "kee a", "gsor a", "co a", "correlates a", "dist a", "distinc a", "distincts a"];
+  const bad: string[] = ["b a", "br a", "su a", "ta a", "code a", "lis a", "summarizes a", "browsee a", "d a", "dro a", "kee a", "gsor a", "co a", "correlates a", "dist a", "distinc a", "distincts a", "duplicate report", "dup report", "duplicatess report"];
   test.each(bad)("unknown command: '%s'", (input) => {
     expect(() => parseCommand(input)).toThrow(/unknown command|empty command/);
   });
@@ -180,6 +182,43 @@ describe("varlists", () => {
     );
     expect(() => parseCommand("distinct a, joint(2)")).toThrow(
       "option 'joint' does not take an argument"
+    );
+  });
+
+  test("duplicates report takes a varlist and an if clause", () => {
+    expect(parseCommand("duplicates report")).toEqual({
+      kind: "duplicates",
+      variables: [],
+    });
+    const cmd = parseCommand("duplicates report a b if c > 2");
+    expect(cmd.kind).toBe("duplicates");
+    expect((cmd as any).variables).toEqual([v("a", 18), v("b", 20)]);
+    expect((cmd as any).filter).toBeDefined();
+    expect(() => parseCommand("duplicates report a, detail")).toThrow(
+      "duplicates report does not take options"
+    );
+  });
+
+  test("duplicates rejects unsupported and missing subcommands", () => {
+    for (const [input, sub] of [
+      ["duplicates drop", "drop"],
+      ["duplicates d", "drop"],
+      ["duplicates list a", "list"],
+      ["duplicates tag", "tag"],
+      ["duplicates examples", "examples"],
+    ]) {
+      expect(() => parseCommand(input)).toThrow(
+        `'duplicates ${sub}' is not supported`
+      );
+    }
+    expect(() => parseCommand("duplicates")).toThrow(
+      "duplicates requires a subcommand"
+    );
+    expect(() => parseCommand("duplicates if a > 1")).toThrow(
+      "duplicates requires a subcommand"
+    );
+    expect(() => parseCommand("duplicates zzz")).toThrow(
+      "unknown duplicates subcommand 'zzz'"
     );
   });
 

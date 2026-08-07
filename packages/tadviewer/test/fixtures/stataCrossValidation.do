@@ -106,6 +106,36 @@ distinct a c, joint missing
 file write results "distinct_joint_missing,a_c,total," %24.17g (r(N)) _n
 file write results "distinct_joint_missing,a_c,ndistinct," %24.17g (r(ndistinct)) _n
 
+* duplicates report displays its panel but does not return it in r(), so
+* rebuild the panel from duplicates tag (copies = tag + 1) after showing
+* the real output in the log for eyeball comparison.
+duplicates report
+duplicates tag, gen(dupall)
+levelsof dupall, local(levels)
+foreach l of local levels {
+    count if dupall == `l'
+    file write results "duplicates_all,copies_`=`l' + 1'," %24.17g (r(N)) _n
+}
+drop dupall
+
+duplicates report c
+duplicates tag c, gen(dupc)
+levelsof dupc, local(levels)
+foreach l of local levels {
+    count if dupc == `l'
+    file write results "duplicates_c,copies_`=`l' + 1'," %24.17g (r(N)) _n
+}
+drop dupc
+
+duplicates report c if c >= 3
+duplicates tag c if c >= 3, gen(dupcif)
+levelsof dupcif, local(levels)
+foreach l of local levels {
+    count if dupcif == `l'
+    file write results "duplicates_c_if,copies_`=`l' + 1'," %24.17g (r(N)) _n
+}
+drop dupcif
+
 count
 file write results "count,,N," %24.17g (r(N)) _n
 

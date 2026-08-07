@@ -104,6 +104,25 @@
     "total": 6,
     "ndistinct": 6
   },
+  "duplicatesReportAll": {
+    "stataCommand": "duplicates report",
+    "comment": "Stata's dataset holds only a, b, c, so 'all variables' there is this varlist here",
+    "tadsCommand": "duplicates report a b c",
+    "rows": [{ "copies": 1, "observations": 6, "surplus": 0 }]
+  },
+  "duplicatesReportVar": {
+    "command": "duplicates report c",
+    "header": "Duplicates in terms of c",
+    "rows": [
+      { "copies": 1, "observations": 2, "surplus": 0 },
+      { "copies": 2, "observations": 4, "surplus": 2 }
+    ]
+  },
+  "duplicatesReportIf": {
+    "command": "duplicates report c if c >= 3",
+    "header": "Duplicates in terms of c",
+    "rows": [{ "copies": 2, "observations": 4, "surplus": 2 }]
+  },
   "count": {
     "all": 6,
     "cGreaterThan2": 4
