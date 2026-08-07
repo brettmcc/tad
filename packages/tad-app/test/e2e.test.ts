@@ -378,3 +378,29 @@ test("in-memory toggle materializes the parquet dataset and back", async () => {
   );
   expect(await entries.last().textContent()).toContain("6");
 }, 120000);
+
+test("correlate renders the lower-triangular matrix", async () => {
+  await runCommand("corr a b c");
+  const entries = page.locator('[data-testid="result-entry"]');
+  await page.waitForFunction(
+    () =>
+      document.querySelectorAll('[data-testid="result-entry"]').length === 6,
+    undefined,
+    { timeout: 30000 }
+  );
+  const lastEntry = entries.last();
+  // casewise deletion keeps rows 1, 2, 4, 6 (a, b, c all non-null)
+  expect(await lastEntry.textContent()).toContain("(obs=4)");
+  const cellTexts = await lastEntry
+    .locator("table.command-result-table tbody td")
+    .allTextContents();
+  // b = a + 0.5 on those rows, so corr(a, b) is exactly 1
+  expect(cellTexts.slice(0, 4)).toEqual(["a", "1.0000", "", ""]);
+  expect(cellTexts.slice(4, 8)).toEqual(["b", "1.0000", "1.0000", ""]);
+  expect(cellTexts.slice(8, 12)).toEqual([
+    "c",
+    "0.9903",
+    "0.9903",
+    "1.0000",
+  ]);
+}, 90000);
