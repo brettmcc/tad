@@ -4,9 +4,9 @@
  * Grammar (deterministic, no backtracking):
  *
  *   command := browseCmd | summarizeCmd | tabulateCmd | correlateCmd
- *            | codebookCmd | distinctCmd | describeCmd | dsCmd | listCmd
- *            | countCmd | orderCmd | sortCmd | gsortCmd | keepCmd
- *            | dropCmd | histogramCmd
+ *            | codebookCmd | distinctCmd | duplicatesCmd | describeCmd
+ *            | dsCmd | listCmd | countCmd | orderCmd | sortCmd | gsortCmd
+ *            | keepCmd | dropCmd | histogramCmd
  *
  *   browseCmd    := BROWSE varlist? ifClause?
  *   summarizeCmd := SUM varlist? ifClause? options?      -- option: d[etail]
@@ -16,6 +16,7 @@
  *   distinctCmd  := DISTINCT varlist? ifClause? options?
  *                                                        -- options:
  *                                                        m[issing], j[oint]
+ *   duplicatesCmd := DUPLICATES r[eport] varlist? ifClause?
  *   describeCmd  := DESCRIBE varlist?
  *   dsCmd        := DS varlist?
  *   listCmd      := LIST varlist? ifClause?
@@ -51,6 +52,7 @@
  *   correlate: cor | corr | ... | correlate
  *   codebook:  codebook
  *   distinct:  distinct
+ *   duplicates: duplicates (subcommand: r | re | ... | report)
  *   describe:  des | desc | ... | describe
  *   ds:        ds
  *   list:      list
@@ -106,6 +108,7 @@ const COMMAND_FORMS: Array<{
   { kind: "correlate", full: "correlate", minPrefix: 3 },
   { kind: "codebook", full: "codebook", minPrefix: 8 },
   { kind: "distinct", full: "distinct", minPrefix: 8 },
+  { kind: "duplicates", full: "duplicates", minPrefix: 10 },
   { kind: "describe", full: "describe", minPrefix: 3 },
   { kind: "ds", full: "ds", minPrefix: 2 },
   { kind: "list", full: "list", minPrefix: 4 },
@@ -127,6 +130,15 @@ function matchCommandName(name: string): CommandName | null {
   );
   return matches.length === 1 ? matches[0].kind : null;
 }
+
+/** Stata's `duplicates` subcommands; only `report` is implemented here */
+const DUPLICATES_SUBCOMMANDS = [
+  "report",
+  "examples",
+  "list",
+  "tag",
+  "drop",
+];
 
 /** parsed command option, e.g. detail or bin(20) */
 interface CmdOption {
@@ -213,7 +225,7 @@ class Parser {
     const kind = matchCommandName(first.text);
     if (kind === null) {
       this.error(
-        `unknown command '${first.text}': expected one of bro[wse], sum[marize], tab[ulate], cor[relate], codebook, distinct, des[cribe], ds, list, cou[nt], ord[er], so[rt], gsort, keep, drop, hist[ogram]`,
+        `unknown command '${first.text}': expected one of bro[wse], sum[marize], tab[ulate], cor[relate], codebook, distinct, duplicates, des[cribe], ds, list, cou[nt], ord[er], so[rt], gsort, keep, drop, hist[ogram]`,
         first.pos
       );
     }
@@ -287,6 +299,16 @@ class Parser {
         return filter === undefined
           ? { kind, variables, missing, joint }
           : { kind, variables, filter, missing, joint };
+      }
+      case "duplicates": {
+        this.parseDuplicatesSubcommand();
+        const variables = this.parseVarlist();
+        const filter = this.parseOptionalIf();
+        this.expectNoOptions("duplicates report");
+        this.expectEof();
+        return filter === undefined
+          ? { kind, variables }
+          : { kind, variables, filter };
       }
       case "describe": {
         const variables = this.parseVarlist();
@@ -433,6 +455,39 @@ class Parser {
     const tok = this.peek();
     if (tok.type === "op" && tok.text === ",") {
       this.error(`${cmd} does not take options`, tok.pos);
+    }
+  }
+
+  /**
+   * Consume the `duplicates` subcommand. Only `report` is implemented;
+   * Stata's other subcommands are recognized purely so they can be
+   * rejected with a useful message rather than "unknown subcommand".
+   */
+  private parseDuplicatesSubcommand(): void {
+    const tok = this.peek();
+    if (tok.type !== "word" || tok.text === "if") {
+      this.error(
+        "duplicates requires a subcommand; only 'duplicates report' is supported",
+        tok.pos
+      );
+    }
+    this.next();
+    // no two subcommand names share a first letter, so any prefix is
+    // unambiguous
+    const sub = DUPLICATES_SUBCOMMANDS.find((name) =>
+      name.startsWith(tok.text)
+    );
+    if (sub === undefined) {
+      this.error(
+        `unknown duplicates subcommand '${tok.text}': expected r[eport]`,
+        tok.pos
+      );
+    }
+    if (sub !== "report") {
+      this.error(
+        `'duplicates ${sub}' is not supported; only 'duplicates report' is implemented`,
+        tok.pos
+      );
     }
   }
 

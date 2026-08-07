@@ -73,6 +73,7 @@ export type ParsedCommand =
       missing: boolean;
       joint: boolean;
     }
+  | { kind: "duplicates"; variables: VarRef[]; filter?: ParsedExpr }
   | { kind: "describe"; variables: VarRef[] }
   | { kind: "ds"; variables: VarRef[] }
   | { kind: "list"; variables: VarRef[]; filter?: ParsedExpr }
@@ -124,6 +125,7 @@ export type StataCommand =
       missing: boolean;
       joint: boolean;
     }
+  | { kind: "duplicates"; variables: string[]; filter?: Expr }
   | { kind: "describe"; variables: string[] }
   | { kind: "ds"; variables: string[] }
   | { kind: "list"; variables: string[]; filter?: Expr }

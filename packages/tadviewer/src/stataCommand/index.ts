@@ -17,6 +17,8 @@ export {
   DETAIL_PERCENTILES,
   DistinctPlan,
   DsPlan,
+  DUPLICATES_GROUP_LIMIT,
+  DuplicatesPlan,
   exprToFilterExp,
   exprToSqlWhere,
   GridPlan,

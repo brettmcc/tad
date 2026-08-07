@@ -28,6 +28,7 @@ import {
   DescribePlan,
   DETAIL_PERCENTILES,
   DistinctPlan,
+  DuplicatesPlan,
   GridPlan,
   HistogramPlan,
   ListPlan,
@@ -467,6 +468,55 @@ async function runDistinct(
   ];
 }
 
+/**
+ * Duplicates report renders Stata's copies / observations / surplus
+ * panel, preceded by the header naming the varlist it was computed over
+ * and followed by the totals (Stata prints only the panel, but the
+ * surplus total is the number a `duplicates drop` would remove).
+ */
+async function runDuplicates(
+  plan: DuplicatesPlan,
+  ctx: CommandExecutionContext
+): Promise<ResultBlock[]> {
+  const res = await ctx.runReadOnlySql(plan.sql);
+  const header: ResultBlock = {
+    kind: "text",
+    text: `Duplicates in terms of ${
+      plan.allVariables ? "all variables" : plan.variables.join(" ")
+    }`,
+  };
+  if (res.rows.length === 0) {
+    return [header, { kind: "text", text: "no observations" }];
+  }
+  const rows = res.rows.map((row: Row): CellValue[] => [
+    asNumber(row.copies),
+    asNumber(row.observations),
+    asNumber(row.surplus),
+  ]);
+  const sumColumn = (idx: number) =>
+    rows.reduce((acc, r) => acc + ((r[idx] as number | null) ?? 0), 0);
+  const nRows = asNumber(res.rows[0].n_rows) ?? rows.length;
+  const truncNote =
+    nRows > rows.length
+      ? ` — showing first ${rows.length} of ${nRows} copy counts`
+      : "";
+  return [
+    header,
+    {
+      kind: "table",
+      columns: ["Copies", "Observations", "Surplus"],
+      align: ["right", "right", "right"],
+      rows,
+    },
+    {
+      kind: "text",
+      text: `Total: ${sumColumn(1)} observations, ${sumColumn(
+        2
+      )} surplus${truncNote}`,
+    },
+  ];
+}
+
 async function runCount(
   plan: CountPlan,
   ctx: CommandExecutionContext
@@ -655,6 +705,13 @@ export async function executeCommand(
       }
       case "distinct":
         return ok("distinct", input, plan.sql, await runDistinct(plan, ctx));
+      case "duplicates":
+        return ok(
+          "duplicates",
+          input,
+          plan.sql,
+          await runDuplicates(plan, ctx)
+        );
       case "count":
         return ok("count", input, plan.sql, await runCount(plan, ctx));
       case "list":

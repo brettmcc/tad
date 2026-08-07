@@ -230,6 +230,13 @@ export function resolveCommand(
       } as const;
       return filter === undefined ? { ...base } : { ...base, filter };
     }
+    case "duplicates": {
+      const variables = resolveVarlist(cmd.variables, columns, true);
+      const filter = maybeFilter(cmd.filter, columns);
+      return filter === undefined
+        ? { kind: "duplicates", variables }
+        : { kind: "duplicates", variables, filter };
+    }
     case "describe":
     case "ds": {
       const variables = resolveVarlist(cmd.variables, columns, true);

@@ -44,6 +44,12 @@
  *   option is given (then it counts as one distinct value). With `joint`
  *   the varlist is counted as a unit (distinct value combinations, with
  *   casewise deletion).
+ * - duplicates report: the distribution of copies over the varlist --
+ *   one row per observed group size, with the number of observations
+ *   having that many copies and the surplus (observations that would be
+ *   removed by keeping one per group). Like Stata, missing is just
+ *   another value: two observations that are missing in the same
+ *   variables are duplicates of each other.
  * - count: number of rows matching the session + if filters.
  * - list: first LIST_LIMIT matching rows of the requested columns.
  * - describe: variable names and SQL types plus the observation count.
@@ -79,6 +85,14 @@ export const TAB_GROUP_LIMIT = 1000;
 
 /** maximum rows returned by the list command */
 export const LIST_LIMIT = 200;
+
+/**
+ * Maximum number of distinct group sizes a duplicates report will
+ * return. One row per *distinct* copy count, so this is only reachable
+ * on pathological data; the executor reports the total so the UI can
+ * indicate truncation.
+ */
+export const DUPLICATES_GROUP_LIMIT = 1000;
 
 /** percentiles reported by summarize, detail (Stata's set) */
 export const DETAIL_PERCENTILES = [1, 5, 10, 25, 50, 75, 90, 95, 99];
@@ -241,6 +255,18 @@ export interface DistinctPlan {
   sql: string;
 }
 
+export interface DuplicatesPlan {
+  kind: "duplicates";
+  variables: string[];
+  /** true when the varlist covers every variable of the session view */
+  allVariables: boolean;
+  /**
+   * one query: group sizes over the varlist, rolled up into one row per
+   * distinct group size (copies, observations, surplus).
+   */
+  sql: string;
+}
+
 export interface CountPlan {
   kind: "count";
   sql: string;
@@ -297,6 +323,7 @@ export type CommandPlan =
   | CorrelatePlan
   | CodebookPlan
   | DistinctPlan
+  | DuplicatesPlan
   | CountPlan
   | ListPlan
   | DescribePlan
@@ -1012,6 +1039,50 @@ function planDistinct(
   };
 }
 
+/**
+ * Duplicates report, following Stata's `duplicates report`: group the
+ * observations by the varlist and roll the group sizes up into one row
+ * per distinct size. GROUP BY treats nulls as equal, which is exactly
+ * Stata's rule that missing is an ordinary value here.
+ *
+ * For a group size k occurring g times: observations = k*g and
+ * surplus = (k-1)*g, the observations that `duplicates drop` would
+ * remove.
+ */
+function planDuplicates(
+  cmd: StataCommand & { kind: "duplicates" },
+  ctx: PlanContext
+): DuplicatesPlan {
+  const quoted = cmd.variables.map((colId) => ctx.dialect.quoteCol(colId));
+  const groupLines = ["SELECT count(*) AS copies", fromClause(ctx)];
+  const where = whereClause(cmd.filter, ctx);
+  if (where !== "") {
+    groupLines.push(where);
+  }
+  groupLines.push(`GROUP BY ${quoted.join(", ")}`);
+  const groups = groupLines
+    .join("\n")
+    .split("\n")
+    .map((line) => "  " + line)
+    .join("\n");
+  const sql = [
+    "SELECT copies,",
+    "       CAST(copies * count(*) AS BIGINT) AS observations,",
+    "       CAST((copies - 1) * count(*) AS BIGINT) AS surplus,",
+    "       count(*) OVER () AS n_rows",
+    "FROM (",
+    groups,
+    ")",
+    "GROUP BY copies",
+    "ORDER BY copies",
+    `LIMIT ${DUPLICATES_GROUP_LIMIT}`,
+  ].join("\n");
+  const allVariables =
+    cmd.variables.length === ctx.schema.columns.length &&
+    cmd.variables.every((colId, i) => colId === ctx.schema.columns[i]);
+  return { kind: "duplicates", variables: cmd.variables, allVariables, sql };
+}
+
 function planCount(
   cmd: StataCommand & { kind: "count" },
   ctx: PlanContext
@@ -1288,6 +1359,8 @@ export function planCommand(cmd: StataCommand, ctx: PlanContext): CommandPlan {
       return planCodebook(cmd, ctx);
     case "distinct":
       return planDistinct(cmd, ctx);
+    case "duplicates":
+      return planDuplicates(cmd, ctx);
     case "count":
       return planCount(cmd, ctx);
     case "list":
