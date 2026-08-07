@@ -21,7 +21,8 @@ table, and SQL-generation core.
   abbreviation, wildcards (`price*`), backtick quoting for awkward
   names, `if` expressions, Tab completion, and command history.
 - An append-only **results pane** shows each command's output (and the
-  exact SQL it ran, behind a disclosure).
+  exact SQL it ran, behind a disclosure), with **Ctrl+F**
+  find-in-results and a drag-to-resize split.
 - The usual Tad GUI remains: pivot, filter, sort, column selection and
   search, formatting, histograms per column.
 - Everything is strictly **read-only**: data files are never modified,
@@ -52,6 +53,11 @@ prefixes shown in brackets are accepted, e.g. `sum` for `summarize`):
 | `drop` | `drop varlist` / `drop if expr` | Drop variables, or accumulate the inverse filter. |
 | `histogram` | `hist[ogram] var [if expr] [, bin(#)]` | Frequency histogram of a numeric variable. |
 
+Options may be abbreviated where unambiguous (`sum, d`, `corr x y, cov`,
+`distinct x, j`). `codebook`, `distinct`, and `duplicates` must be
+spelled in full, though the `duplicates` subcommand may be abbreviated
+(`duplicates r`).
+
 `if` expressions support `==`/`!=`/`<`/`<=`/`>`/`>=` (with `=` and `~=`
 as synonyms), `&`, `|`, parentheses, string/number/date literals, and
 Stata missing-value syntax: `x == .` / `x != .` / `x < .` (non-missing)
@@ -78,16 +84,6 @@ anyway**. Tads then shows up in the Start menu and as an **Open
 With...** choice for `.csv`, `.parquet`, `.tad`, and similar files;
 uninstall it from **Settings → Apps**.
 
-**Package manager:**
-
-```powershell
-winget install BrettMcCully.Tads
-```
-
-(awaiting approval in
-[microsoft/winget-pkgs#399350](https://github.com/microsoft/winget-pkgs/pull/399350)
-— use the download link until that merges.)
-
 ### macOS
 
 **Download:** get `Tads-<version>-arm64.dmg` for Apple Silicon
@@ -104,6 +100,12 @@ and choose **Open**; if macOS still refuses, allow it under
 
 ```sh
 sudo apt install ./tads_<version>_amd64.deb
+```
+
+**Fedora / RHEL / openSUSE:** download `tads-<version>.x86_64.rpm`, then:
+
+```sh
+sudo dnf install ./tads-<version>.x86_64.rpm
 ```
 
 **Any other distribution:** download `tads-<version>.tar.bz2`, unpack
@@ -147,14 +149,19 @@ is ~100 MB). After `npm install && npm run build`:
 
 ```sh
 npm run dist:win     # NSIS installer (also supports silent installs: Tads.Setup.<v>.exe /S)
-npm run dist:mac     # dmg + zip; releases build both archs in CI (.github/workflows/release-macos.yml)
+npm run dist:mac     # dmg + zip (add -- --arm64 --x64 for both architectures)
 npm run dist:linux   # deb + tar.bz2 (+ rpm if rpmbuild is installed)
 ```
 
-electron-builder can only target the OS it runs on, so build each
-installer on its own platform (WSL works for the Linux one; macOS
-installers require a Mac, which is why releases build them on a GitHub
-Actions runner). `npm run pack` produces an unpacked runnable app
+electron-builder can only target the OS it runs on, so building all
+three locally means three machines (WSL works for the Linux one). That
+is why releases build them in CI instead:
+[`.github/workflows/release.yml`](.github/workflows/release.yml) runs on
+a Windows, macOS, and Linux runner whenever a release is published and
+attaches every installer to it, and can be re-run for an existing tag
+with `gh workflow run release.yml -f tag=vX.Y.Z`.
+
+`npm run pack` produces an unpacked runnable app
 (`packages/tad-app/release/win-unpacked/`) for smoke-testing without
 touching an installed copy.
 
@@ -189,6 +196,7 @@ them.
 
 ## Cross-validation
 
-`summarize, detail`, `tabulate`, and `count` results are cross-validated
+`summarize` (with and without `detail`), `tabulate`, `correlate`,
+`distinct`, `duplicates report`, and `count` results are cross-validated
 against Stata/MP 19 output (see
 `packages/tadviewer/test/fixtures/stataCrossValidation.do`).
