@@ -97,21 +97,29 @@ jobs:
           # when the asset name is identical in every release). Copies, not
           # renames: electron-updater's latest*.yml refers to the versioned
           # names, so those must stay attached too.
+          # $1 is a glob, since electron-builder's on-disk names vary by
+          # platform (the NSIS installer is "Tads Setup <v>.exe" with
+          # spaces; GitHub is what renders those spaces as dots).
           stable() {
-            [ -f "$1" ] || { echo "expected installer missing: $1" >&2; exit 1; }
-            cp "$1" "$2"
+            local matches=($1)
+            if [ ${#matches[@]} -ne 1 ]; then
+              echo "expected exactly one match for '$1', got ${#matches[@]}: ${matches[*]}" >&2
+              ls -la >&2
+              exit 1
+            fi
+            cp "${matches[0]}" "$2"
             assets+=("$2")
           }
           case "${{ matrix.name }}" in
             windows)
-              stable "Tads.Setup.$V.exe"    "Tads-Setup-windows-x64.exe" ;;
+              stable "Tads*Setup*$V.exe"     "Tads-Setup-windows-x64.exe" ;;
             macos)
-              stable "Tads-$V-arm64.dmg"    "Tads-macos-arm64.dmg"
-              stable "Tads-$V.dmg"          "Tads-macos-x64.dmg" ;;
+              stable "Tads-$V-arm64.dmg"     "Tads-macos-arm64.dmg"
+              stable "Tads-$V.dmg"           "Tads-macos-x64.dmg" ;;
             linux)
-              stable "tads_${V}_amd64.deb"  "Tads-linux-amd64.deb"
-              stable "tads-$V.x86_64.rpm"   "Tads-linux-x86_64.rpm"
-              stable "tads-$V.tar.bz2"      "Tads-linux-x64.tar.bz2" ;;
+              stable "tads_${V}_amd64.deb"   "Tads-linux-amd64.deb"
+              stable "tads-$V.x86_64.rpm"    "Tads-linux-x86_64.rpm"
+              stable "tads-$V.tar.bz2"       "Tads-linux-x64.tar.bz2" ;;
           esac
 
           printf 'uploading: %s\n' "${assets[@]}"
