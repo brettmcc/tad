@@ -66,6 +66,13 @@ export type ParsedCommand =
       covariance: boolean;
     }
   | { kind: "codebook"; variables: VarRef[]; filter?: ParsedExpr }
+  | {
+      kind: "distinct";
+      variables: VarRef[];
+      filter?: ParsedExpr;
+      missing: boolean;
+      joint: boolean;
+    }
   | { kind: "describe"; variables: VarRef[] }
   | { kind: "ds"; variables: VarRef[] }
   | { kind: "list"; variables: VarRef[]; filter?: ParsedExpr }
@@ -110,6 +117,13 @@ export type StataCommand =
       covariance: boolean;
     }
   | { kind: "codebook"; variables: string[]; filter?: Expr }
+  | {
+      kind: "distinct";
+      variables: string[];
+      filter?: Expr;
+      missing: boolean;
+      joint: boolean;
+    }
   | { kind: "describe"; variables: string[] }
   | { kind: "ds"; variables: string[] }
   | { kind: "list"; variables: string[]; filter?: Expr }

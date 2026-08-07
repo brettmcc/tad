@@ -15,6 +15,7 @@ export {
   defaultHistogramBins,
   DescribePlan,
   DETAIL_PERCENTILES,
+  DistinctPlan,
   DsPlan,
   exprToFilterExp,
   exprToSqlWhere,

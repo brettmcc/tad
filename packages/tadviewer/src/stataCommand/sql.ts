@@ -39,6 +39,11 @@
  * - codebook: per variable, SQL type, N, missing, exact distinct, then
  *   min/max (ordered types) or top values (TOP_VALUES_LIMIT, ties by
  *   value) -- all scalar stats in one scan.
+ * - distinct: per variable, the number of observations and the number of
+ *   distinct values; missing is excluded from both unless the `missing`
+ *   option is given (then it counts as one distinct value). With `joint`
+ *   the varlist is counted as a unit (distinct value combinations, with
+ *   casewise deletion).
  * - count: number of rows matching the session + if filters.
  * - list: first LIST_LIMIT matching rows of the requested columns.
  * - describe: variable names and SQL types plus the observation count.
@@ -223,6 +228,19 @@ export interface CodebookPlan {
   variables: CodebookVarPlan[];
 }
 
+export interface DistinctPlan {
+  kind: "distinct";
+  variables: string[];
+  missing: boolean;
+  joint: boolean;
+  /**
+   * one query: per-variable total/distinct pairs suffixed _0, _1, ...
+   * (a single wide aggregate row), or -- with `joint` -- a single
+   * total/n_distinct pair over the value combinations.
+   */
+  sql: string;
+}
+
 export interface CountPlan {
   kind: "count";
   sql: string;
@@ -278,6 +296,7 @@ export type CommandPlan =
   | TabulatePlan
   | CorrelatePlan
   | CodebookPlan
+  | DistinctPlan
   | CountPlan
   | ListPlan
   | DescribePlan
@@ -912,6 +931,87 @@ function planCodebook(
   return { kind: "codebook", statsSql: statsLines.join("\n"), variables };
 }
 
+/**
+ * Distinct counts, following Stata's `distinct`: observations with a
+ * missing value are excluded from both counts unless the `missing`
+ * option is given, in which case missing counts as one distinct value.
+ *
+ * Without `joint` every variable is counted independently in one scan.
+ * With `joint` the varlist is one unit: the counts are over the distinct
+ * combinations of values, with casewise deletion (an observation counts
+ * only if every listed variable is non-null there) unless `missing`.
+ */
+function planDistinct(
+  cmd: StataCommand & { kind: "distinct" },
+  ctx: PlanContext
+): DistinctPlan {
+  const from = fromClause(ctx);
+  const quoted = cmd.variables.map((colId) => ctx.dialect.quoteCol(colId));
+
+  if (cmd.joint) {
+    // GROUP BY puts all-null combinations in a single group, which is
+    // exactly the "missing is one distinct value" rule
+    const innerWhere = whereClause(
+      cmd.filter,
+      ctx,
+      cmd.missing ? undefined : quoted.map((q) => `${q} IS NOT NULL`).join(" AND ")
+    );
+    const innerLines = ["SELECT count(*) AS freq", from];
+    if (innerWhere !== "") {
+      innerLines.push(innerWhere);
+    }
+    innerLines.push(`GROUP BY ${quoted.join(", ")}`);
+    const inner = innerLines
+      .join("\n")
+      .split("\n")
+      .map((line) => "  " + line)
+      .join("\n");
+    return {
+      kind: "distinct",
+      variables: cmd.variables,
+      missing: cmd.missing,
+      joint: true,
+      sql: [
+        "SELECT CAST(coalesce(sum(freq), 0) AS BIGINT) AS total,",
+        "       count(*) AS n_distinct",
+        "FROM (",
+        inner,
+        ")",
+      ].join("\n"),
+    };
+  }
+
+  const where = whereClause(cmd.filter, ctx);
+  const statCols = quoted.flatMap((q, idx) =>
+    cmd.missing
+      ? [
+          `count(*) AS total_${idx}`,
+          `count(DISTINCT ${q}) + CASE WHEN count(*) > count(${q}) THEN 1 ELSE 0 END AS distinct_${idx}`,
+        ]
+      : [
+          `count(${q}) AS total_${idx}`,
+          `count(DISTINCT ${q}) AS distinct_${idx}`,
+        ]
+  );
+  const lines = [
+    "SELECT " + statCols[0] + ",",
+    ...statCols
+      .slice(1)
+      .map((s, i) => `       ${s}${i === statCols.length - 2 ? "" : ","}`),
+    from,
+  ];
+  if (where !== "") {
+    lines.push(where);
+  }
+  return {
+    kind: "distinct",
+    variables: cmd.variables,
+    missing: cmd.missing,
+    joint: false,
+    sql: lines.join("\n"),
+  };
+}
+
 function planCount(
   cmd: StataCommand & { kind: "count" },
   ctx: PlanContext
@@ -1186,6 +1286,8 @@ export function planCommand(cmd: StataCommand, ctx: PlanContext): CommandPlan {
       return planCorrelate(cmd, ctx);
     case "codebook":
       return planCodebook(cmd, ctx);
+    case "distinct":
+      return planDistinct(cmd, ctx);
     case "count":
       return planCount(cmd, ctx);
     case "list":

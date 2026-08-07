@@ -27,6 +27,7 @@ import {
   defaultHistogramBins,
   DescribePlan,
   DETAIL_PERCENTILES,
+  DistinctPlan,
   GridPlan,
   HistogramPlan,
   ListPlan,
@@ -427,6 +428,45 @@ async function runCodebook(
   });
 }
 
+/**
+ * Distinct renders one row per variable (or a single row for the whole
+ * varlist with `joint`), matching Stata's total / distinct panel.
+ */
+async function runDistinct(
+  plan: DistinctPlan,
+  ctx: CommandExecutionContext
+): Promise<ResultBlock[]> {
+  const res = await ctx.runReadOnlySql(plan.sql);
+  const wide: Row = res.rows[0] ?? {};
+  const rows: CellValue[][] = plan.joint
+    ? [
+        [
+          plan.variables.join(" "),
+          asNumber(wide.total) ?? 0,
+          asNumber(wide.n_distinct) ?? 0,
+        ],
+      ]
+    : plan.variables.map((variable, idx): CellValue[] => [
+        variable,
+        asNumber(wide[`total_${idx}`]) ?? 0,
+        asNumber(wide[`distinct_${idx}`]) ?? 0,
+      ]);
+  return [
+    {
+      kind: "table",
+      columns: [plan.joint ? "Variables" : "Variable", "Total", "Distinct"],
+      align: ["left", "right", "right"],
+      rows,
+    },
+    {
+      kind: "text",
+      text: plan.missing
+        ? "missing counted as a distinct value"
+        : "missing values excluded",
+    },
+  ];
+}
+
 async function runCount(
   plan: CountPlan,
   ctx: CommandExecutionContext
@@ -613,6 +653,8 @@ export async function executeCommand(
         ].join(";\n\n");
         return ok("codebook", input, sql, blocks);
       }
+      case "distinct":
+        return ok("distinct", input, plan.sql, await runDistinct(plan, ctx));
       case "count":
         return ok("count", input, plan.sql, await runCount(plan, ctx));
       case "list":

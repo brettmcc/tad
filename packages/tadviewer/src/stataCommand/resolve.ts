@@ -219,6 +219,17 @@ export function resolveCommand(
         ? { kind: "codebook", variables }
         : { kind: "codebook", variables, filter };
     }
+    case "distinct": {
+      const variables = resolveVarlist(cmd.variables, columns, true);
+      const filter = maybeFilter(cmd.filter, columns);
+      const base = {
+        kind: "distinct",
+        variables,
+        missing: cmd.missing,
+        joint: cmd.joint,
+      } as const;
+      return filter === undefined ? { ...base } : { ...base, filter };
+    }
     case "describe":
     case "ds": {
       const variables = resolveVarlist(cmd.variables, columns, true);

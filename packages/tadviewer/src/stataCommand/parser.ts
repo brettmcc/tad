@@ -4,15 +4,18 @@
  * Grammar (deterministic, no backtracking):
  *
  *   command := browseCmd | summarizeCmd | tabulateCmd | correlateCmd
- *            | codebookCmd | describeCmd | dsCmd | listCmd | countCmd
- *            | orderCmd | sortCmd | gsortCmd | keepCmd | dropCmd
- *            | histogramCmd
+ *            | codebookCmd | distinctCmd | describeCmd | dsCmd | listCmd
+ *            | countCmd | orderCmd | sortCmd | gsortCmd | keepCmd
+ *            | dropCmd | histogramCmd
  *
  *   browseCmd    := BROWSE varlist? ifClause?
  *   summarizeCmd := SUM varlist? ifClause? options?      -- option: d[etail]
  *   tabulateCmd  := TAB varname ifClause? options?       -- option: m[issing]
  *   correlateCmd := CORR varlist? ifClause? options?     -- option: cov[ariance]
  *   codebookCmd  := CODEBOOK varlist? ifClause?
+ *   distinctCmd  := DISTINCT varlist? ifClause? options?
+ *                                                        -- options:
+ *                                                        m[issing], j[oint]
  *   describeCmd  := DESCRIBE varlist?
  *   dsCmd        := DS varlist?
  *   listCmd      := LIST varlist? ifClause?
@@ -47,6 +50,7 @@
  *   tabulate:  tab | tabu | ... | tabulate
  *   correlate: cor | corr | ... | correlate
  *   codebook:  codebook
+ *   distinct:  distinct
  *   describe:  des | desc | ... | describe
  *   ds:        ds
  *   list:      list
@@ -101,6 +105,7 @@ const COMMAND_FORMS: Array<{
   { kind: "tabulate", full: "tabulate", minPrefix: 3 },
   { kind: "correlate", full: "correlate", minPrefix: 3 },
   { kind: "codebook", full: "codebook", minPrefix: 8 },
+  { kind: "distinct", full: "distinct", minPrefix: 8 },
   { kind: "describe", full: "describe", minPrefix: 3 },
   { kind: "ds", full: "ds", minPrefix: 2 },
   { kind: "list", full: "list", minPrefix: 4 },
@@ -208,7 +213,7 @@ class Parser {
     const kind = matchCommandName(first.text);
     if (kind === null) {
       this.error(
-        `unknown command '${first.text}': expected one of bro[wse], sum[marize], tab[ulate], cor[relate], codebook, des[cribe], ds, list, cou[nt], ord[er], so[rt], gsort, keep, drop, hist[ogram]`,
+        `unknown command '${first.text}': expected one of bro[wse], sum[marize], tab[ulate], cor[relate], codebook, distinct, des[cribe], ds, list, cou[nt], ord[er], so[rt], gsort, keep, drop, hist[ogram]`,
         first.pos
       );
     }
@@ -268,6 +273,20 @@ class Parser {
         return filter === undefined
           ? { kind, variables }
           : { kind, variables, filter };
+      }
+      case "distinct": {
+        const variables = this.parseVarlist();
+        const filter = this.parseOptionalIf();
+        const opts = this.parseOptions({
+          missing: { minPrefix: 1, hasArg: false },
+          joint: { minPrefix: 1, hasArg: false },
+        });
+        this.expectEof();
+        const missing = opts.has("missing");
+        const joint = opts.has("joint");
+        return filter === undefined
+          ? { kind, variables, missing, joint }
+          : { kind, variables, filter, missing, joint };
       }
       case "describe": {
         const variables = this.parseVarlist();
