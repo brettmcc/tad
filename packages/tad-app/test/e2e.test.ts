@@ -404,3 +404,23 @@ test("correlate renders the lower-triangular matrix", async () => {
     "1.0000",
   ]);
 }, 90000);
+
+test("duplicates report renders the copies panel", async () => {
+  await runCommand("duplicates report c");
+  const entries = page.locator('[data-testid="result-entry"]');
+  await page.waitForFunction(
+    () =>
+      document.querySelectorAll('[data-testid="result-entry"]').length === 7,
+    undefined,
+    { timeout: 30000 }
+  );
+  const lastEntry = entries.last();
+  const text = await lastEntry.textContent();
+  expect(text).toContain("Duplicates in terms of c");
+  expect(text).toContain("Total: 6 observations, 2 surplus");
+  const cellTexts = await lastEntry
+    .locator("table.command-result-table tbody td")
+    .allTextContents();
+  // c = 1, 2, 3, 3, 5, 5: two singletons and two pairs
+  expect(cellTexts).toEqual(["1", "2", "0", "2", "4", "2"]);
+}, 90000);
